@@ -1,4 +1,3 @@
-````md
 # Enterprise-Grade RAG QA System
 
 A **production-ready Retrieval-Augmented Generation (RAG) Question Answering system** built with FastAPI for querying enterprise documents (PDFs, manuals, policies, research papers) with **citations, confidence scores, and multi-document reasoning**.
@@ -120,7 +119,6 @@ RAG QA SYSTEM
 ├── .env
 ├── .gitignore
 └── README.md
-````
 
 ---
 
