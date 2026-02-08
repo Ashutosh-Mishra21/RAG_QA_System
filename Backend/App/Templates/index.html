@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{% include "components/hero.html" %}
+{% include "components/features.html" %}
+{% include "components/techstack.html" %}
+
+<section class="demo">
+    <h2>Live Demo</h2>
+    <p>Upload documents and ask questions with citations.</p>
+    <a href="/chat" class="btn-primary">Try the QA System</a>
+</section>
+
+{% include "components/footer.html" %}
+
+{% endblock %}
