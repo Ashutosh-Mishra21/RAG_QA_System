@@ -229,6 +229,3 @@ MIT License
 * Hugging Face
 * RAGAS authors
 * OpenAI / Open-source LLM community
-
-```
-```
