@@ -1,14 +1,33 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Document Question Answering</h2>
+<section class="chat-page">
+    <div class="chat-topbar" data-animate>
+        <div class="logo">RAG QA System</div>
+        <a href="/" class="btn-outline">Back to Home</a>
+    </div>
 
-<div class="chat-box" id="chatBox"></div>
+    <div class="chat-header" data-animate>
+        <div>
+            <h2>Document Question Answering</h2>
+            <p>Ask questions across your uploaded documents and receive cited answers.</p>
+        </div>
+        <div class="chat-actions">
+            <span class="pill">Secure session</span>
+        </div>
+    </div>
 
-<div class="input-area">
-    <input type="text" id="questionInput" placeholder="Ask your question...">
-    <button onclick="askQuestion()">Ask</button>
-</div>
+    <div class="chat-box" id="chatBox"></div>
+
+    <div class="input-area glass">
+        <button class="icon-button" type="button" aria-label="Upload files">
+            📎
+        </button>
+        <input type="text" id="questionInput" placeholder="Ask your question...">
+        <button class="btn-primary" onclick="askQuestion()">Send</button>
+    </div>
+    <p class="input-hint">Tip: Ask for summaries, comparisons, or extract citations for compliance reviews.</p>
+</section>
 
 <script src="/static/js/chat.js"></script>
 {% endblock %}

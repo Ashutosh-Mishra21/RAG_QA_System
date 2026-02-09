@@ -3,23 +3,33 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Enterprise RAG QA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RAG QA System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 
 <body>
 
     <nav class="navbar">
-        <div class="logo">📄 RAG QA System</div>
-        <div class="nav-links">
-            <a href="/">Home</a>
-            <a href="/chat">Chat</a>
+        <div class="nav-inner">
+            <div class="logo">RAG QA System</div>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/chat">Chat</a>
+                <a href="https://github.com/yourname/enterprise-rag">GitHub</a>
+                <a href="/chat" class="nav-cta">Try Chat</a>
+            </div>
         </div>
     </nav>
 
     <main class="container">
         {% block content %}{% endblock %}
     </main>
+
+    <script src="/static/js/animations.js"></script>
 
 </body>
 

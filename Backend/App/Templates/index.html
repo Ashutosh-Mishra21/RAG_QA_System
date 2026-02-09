@@ -3,13 +3,30 @@
 {% block content %}
 
 {% include "components/hero.html" %}
+{% include "components/how_it_works.html" %}
 {% include "components/features.html" %}
 {% include "components/techstack.html" %}
 
-<section class="demo">
-    <h2>Live Demo</h2>
-    <p>Upload documents and ask questions with citations.</p>
-    <a href="/chat" class="btn-primary">Try the QA System</a>
+<section class="demo" id="live-demo">
+    <div class="section-heading" data-animate>
+        <span>Live Demo</span>
+        <h2>See It in Action</h2>
+        <p>Watch how the RAG QA System answers questions from documents.</p>
+    </div>
+    <div class="video-card glass" data-animate>
+        <div class="video-placeholder">
+            <div class="play-button">▶</div>
+            <p>Demo video placeholder</p>
+        </div>
+    </div>
+</section>
+
+<section class="cta" data-animate>
+    <div>
+        <h2>Ready to try it yourself?</h2>
+        <p>Launch the chat experience and start asking grounded questions.</p>
+    </div>
+    <a href="/chat" class="btn-primary">Open Chat</a>
 </section>
 
 {% include "components/footer.html" %}
