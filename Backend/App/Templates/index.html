@@ -1,34 +1,92 @@
 {% extends "base.html" %}
 
 {% block content %}
-
-{% include "components/hero.html" %}
-{% include "components/how_it_works.html" %}
-{% include "components/features.html" %}
-{% include "components/techstack.html" %}
-
-<section class="demo" id="live-demo">
-    <div class="section-heading" data-animate>
-        <span>Live Demo</span>
-        <h2>See It in Action</h2>
-        <p>Watch how the RAG QA System answers questions from documents.</p>
-    </div>
-    <div class="video-card glass" data-animate>
-        <div class="video-placeholder">
-            <div class="play-button">▶</div>
-            <p>Demo video placeholder</p>
+<section class="hero">
+    <div class="hero-content">
+        <p class="eyebrow">RAG QA System</p>
+        <h1>RAG QA System</h1>
+        <p class="hero-subtitle">Ask questions. Get grounded answers from your documents.</p>
+        <div class="hero-actions">
+            <a href="/chat" class="btn-primary">Try Live Chat</a>
+            <a href="#demo" class="btn-secondary">View Demo</a>
         </div>
     </div>
 </section>
 
-<section class="cta" data-animate>
-    <div>
+<section class="section how-it-works" id="how-it-works">
+    <div class="section-heading">
+        <p class="eyebrow">How it works</p>
+        <h2>Simple workflow. Powerful answers.</h2>
+        <p>Upload documents, process content, and retrieve grounded answers instantly.</p>
+    </div>
+    <div class="card-grid">
+        <article class="info-card">
+            <div class="card-icon">⬆️</div>
+            <h3>Upload documents</h3>
+            <p>Upload PDFs or files to the system.</p>
+        </article>
+        <article class="info-card">
+            <div class="card-icon">🧠</div>
+            <h3>Text processing</h3>
+            <p>Files are split into smart chunks for analysis.</p>
+        </article>
+        <article class="info-card">
+            <div class="card-icon">🔎</div>
+            <h3>Embedding & retrieval</h3>
+            <p>Ask a question—AI retrieves relevant context.</p>
+        </article>
+    </div>
+    <div class="steps-block">
+        <p class="steps-title">How it works:</p>
+        <ol>
+            <li>Upload documents</li>
+            <li>System processes and splits content</li>
+            <li>Embeddings are created</li>
+            <li>User asks a question</li>
+            <li>Relevant context is retrieved</li>
+            <li>Grounded answer is generated</li>
+        </ol>
+    </div>
+</section>
+
+<section class="section demo" id="demo">
+    <div class="section-heading">
+        <p class="eyebrow">Demo</p>
+        <h2>See it in Action</h2>
+        <p>Watch how the RAG QA System answers questions from documents.</p>
+    </div>
+    <div class="video-shell">
+        <div class="video-placeholder">
+            <div class="play-button">▶</div>
+            <p>Video demo placeholder</p>
+        </div>
+    </div>
+</section>
+
+<section class="section cta">
+    <div class="cta-content">
         <h2>Ready to try it yourself?</h2>
-        <p>Launch the chat experience and start asking grounded questions.</p>
+        <p>Start chatting with your own documents using RAG QA System.</p>
     </div>
     <a href="/chat" class="btn-primary">Open Chat</a>
 </section>
 
-{% include "components/footer.html" %}
+<footer class="footer">
+    <div class="footer-inner">
+        <div class="footer-profile">
+            <p class="footer-name">Ashutosh Mishra</p>
+            <p class="footer-role">Engineer</p>
+            <p class="footer-description">
+                AI/ML Engineer building data-driven, intelligent systems. Focused on quality, usability, and
+                innovation in applied AI.
+            </p>
+        </div>
+        <div class="footer-links">
+            <a href="https://github.com/Ashutosh-Mishra21">GitHub</a>
+            <a href="https://www.linkedin.com/in/ashutosh-mishra21/">LinkedIn</a>
+            <a href="mailto:ashutoshmishra21oct2003@gmail.com">Email</a>
+        </div>
+    </div>
+</footer>
 
 {% endblock %}
