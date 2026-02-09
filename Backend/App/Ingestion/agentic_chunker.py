@@ -1,17 +1,12 @@
-﻿import google.generativeai as genai
+﻿import json
 import os
-import json
+from dataclasses import dataclass
+from typing import List, Optional
+
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
-
-API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-if not API_KEY:
-    raise ValueError("Missing GOOGLE_API_KEY (or GEMINI_API_KEY) environment variable.")
-
-genai.configure(api_key=API_KEY)
-
-model = genai.GenerativeModel("gemini-1.5-flash")
 
 SYSTEM_PROMPT = """
 You are an expert document analyst.
@@ -25,7 +20,7 @@ Rules:
 """
 
 
-def _parse_chunks(text: str) -> list[str]:
+def _parse_chunks(text: str) -> List[str]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
@@ -42,6 +37,23 @@ def _parse_chunks(text: str) -> list[str]:
     return chunks
 
 
-def agentic_chunk(text: str) -> list[str]:
-    response = model.generate_content(SYSTEM_PROMPT + "\n\nTEXT:\n" + text)
-    return _parse_chunks(response.text)
+@dataclass
+class AgenticChunker:
+    model_name: str = "gemini-1.5-flash"
+    api_key: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        api_key = (
+            self.api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        )
+        if not api_key:
+            raise ValueError(
+                "Missing GOOGLE_API_KEY (or GEMINI_API_KEY) environment variable."
+            )
+
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel(self.model_name)
+
+    def chunk(self, text: str) -> List[str]:
+        response = self.model.generate_content(f"{SYSTEM_PROMPT}\n\nTEXT:\n{text}")
+        return _parse_chunks(response.text)
