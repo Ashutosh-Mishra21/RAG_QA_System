@@ -1,4 +1,15 @@
 # ===============================
+# Secrets & Environment
+# ===============================
+.env
+.env.*
+*.env
+*.secrets
+secrets.*
+*.key
+*.pem
+
+# ===============================
 # Python
 # ===============================
 __pycache__/
@@ -6,14 +17,37 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ===============================
+# Virtual Environments
+# ===============================
 .venv/
 venv/
+env/
+ENV/
 
 # ===============================
 # Jupyter
 # ===============================
 .ipynb_checkpoints/
+
+# ===============================
+# Logs & Temporary Files
+# ===============================
+*.log
+logs/
+*.out
+*.err
+tmp/
+temp/
+*.tmp
+*.swp
 
 # ===============================
 # OS / Editor
@@ -24,29 +58,36 @@ Thumbs.db
 .idea/
 
 # ===============================
-# Logs
+# Build / Distribution
 # ===============================
-*.log
-logs/
+build/
+dist/
+*.egg-info/
+.eggs/
+*.whl
+pip-wheel-metadata/
 
 # ===============================
-# Data & Artifacts (IMPORTANT)
+# Data & Generated Artifacts
 # ===============================
 Data/
 Backend/App/Data/
 Backend/App/vector_db/
 Backend/App/processed_chunks/
+**/vector_store/
+**/vectorstores/
+**/embeddings/
+**/index/
+*.faiss
+*.index
+*.ann
+*.npy
+*.npz
 
 # ===============================
-# Model & Cache Files
+# Model / Cache Artifacts
 # ===============================
-*.bin
-*.pt
-*.onnx
-*.h5
-*.ckpt
 .cache/
-.cache/**
 huggingface/
 sentence_transformers/
 
@@ -56,21 +97,6 @@ sentence_transformers/
 *.pid
 docker-data/
 .env.docker
-
-# ===============================
-# Build / Dist
-# ===============================
-build/
-dist/
-*.egg-info/
-
-# ===============================
-# Temporary Files
-# ===============================
-tmp/
-temp/
-*.tmp
-*.swp
 
 # ===============================
 # Evaluation Outputs

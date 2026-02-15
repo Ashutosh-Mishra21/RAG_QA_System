@@ -20,8 +20,10 @@
     <div class="chat-box" id="chatBox"></div>
 
     <div class="input-area glass">
-        <button class="icon-button" type="button" aria-label="Upload files">
-            📎
+        <input type="file" id="fileInput" style="display:none" multiple>
+        
+        <button class="icon-button" type="button" onclick="document.getElementById('fileInput').click()">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
         </button>
         <input type="text" id="questionInput" placeholder="Ask your question...">
         <button class="btn-primary" onclick="askQuestion()">Send</button>

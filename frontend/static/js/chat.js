@@ -1,4 +1,14 @@
-﻿async function askQuestion() {
+﻿// Wait until DOM is fully loaded
+document.addEventListener("DOMContentLoaded", function () {
+    const fileInput = document.getElementById("fileInput");
+
+    if (fileInput) {
+        fileInput.addEventListener("change", uploadFiles);
+    }
+});
+
+// Ask question function
+async function askQuestion() {
     const input = document.getElementById("questionInput");
     const chatBox = document.getElementById("chatBox");
 
@@ -26,4 +36,36 @@
             </div>
         </div>
     `;
+
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Upload files function
+function uploadFiles(event) {
+    const chatBox = document.getElementById("chatBox");
+    const files = event.target.files;
+
+    if (!files.length) return;
+
+    const formData = new FormData();
+    formData.append("file", files[0]); // match backend parameter name
+
+    chatBox.innerHTML += `<div class="system-msg">Uploading file...</div>`;
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    fetch("/api/upload", {
+        method: "POST",
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            chatBox.innerHTML += `<div class="system-msg">File uploaded successfully.</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+            console.log(data);
+        })
+        .catch(error => {
+            chatBox.innerHTML += `<div class="system-msg">Upload failed.</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+            console.error(error);
+        });
 }
