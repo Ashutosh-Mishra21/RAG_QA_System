@@ -1,8 +1,0 @@
-fastapi
-jinja2
-uvicorn
-python-dotenv
-google-generativeai
-langchain
-sentence-transformers
-docling
