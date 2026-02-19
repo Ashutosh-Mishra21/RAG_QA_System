@@ -1,4 +1,7 @@
 ﻿// Wait until DOM is fully loaded
+let currentDocumentId = null;
+
+
 document.addEventListener("DOMContentLoaded", function () {
     const fileInput = document.getElementById("fileInput");
 
@@ -6,6 +9,13 @@ document.addEventListener("DOMContentLoaded", function () {
         fileInput.addEventListener("change", uploadFiles);
     }
 });
+
+
+function scrollToBottom() {
+    const chatBox = document.getElementById("chatBox");
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
 
 // Ask question function
 async function askQuestion() {
@@ -37,7 +47,7 @@ async function askQuestion() {
         </div>
     `;
 
-    chatBox.scrollTop = chatBox.scrollHeight;
+    scrollToBottom();
 }
 
 // Upload files function
@@ -50,8 +60,13 @@ function uploadFiles(event) {
     const formData = new FormData();
     formData.append("file", files[0]); // match backend parameter name
 
-    chatBox.innerHTML += `<div class="system-msg">Uploading file...</div>`;
-    chatBox.scrollTop = chatBox.scrollHeight;
+    chatBox.innerHTML += `
+        <div class="system-msg">
+            Uploading file...<br>
+            File: <strong>${files[0].name}</strong>
+        </div>`;
+
+    scrollToBottom();
 
     fetch("/api/upload", {
         method: "POST",
@@ -59,13 +74,24 @@ function uploadFiles(event) {
     })
         .then(response => response.json())
         .then(data => {
-            chatBox.innerHTML += `<div class="system-msg">File uploaded successfully.</div>`;
-            chatBox.scrollTop = chatBox.scrollHeight;
-            console.log(data);
+            currentDocumentId = data.document.document_id;
+
+            chatBox.innerHTML += `
+                <div class="system-msg">
+                    File uploaded successfully.<br>
+                    Uploaded: <strong>${data.document.filename}</strong><br>
+                    Document ID: <strong>${currentDocumentId || "N/A"}</strong><br>
+                    Structured JSON: <strong>${data.pipeline.structured_output}</strong>
+                </div>
+            `;
+
+            scrollToBottom();
+
+            console.log("Current Document ID:", currentDocumentId);
         })
         .catch(error => {
             chatBox.innerHTML += `<div class="system-msg">Upload failed.</div>`;
-            chatBox.scrollTop = chatBox.scrollHeight;
+            scrollToBottom();
             console.error(error);
         });
 }

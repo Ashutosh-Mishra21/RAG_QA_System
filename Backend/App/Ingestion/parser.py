@@ -1,33 +1,20 @@
-﻿from dataclasses import dataclass, field
-from typing import Dict, List
+﻿from pathlib import Path
+import json
 
-from docling.document_converter import DocumentConverter
-
-from ..indexing.embedder import SentenceTransformerEmbedder
-
-
-@dataclass
-class DocumentLoader:
-    converter: DocumentConverter = field(default_factory=DocumentConverter)
-
-    def load_pdf(self, file_path: str) -> List[Dict[str, object]]:
-        """
-        Uses Docling to extract structured content from PDF.
-        """
-        result = self.converter.convert(file_path)
-
-        documents: List[Dict[str, object]] = []
-
-        for block in result.document.text_blocks:
-            documents.append(
-                {
-                    "text": block.text,
-                    "metadata": {
-                        "source": file_path,
-                        "page": block.page,
-                        "role": block.role,  # heading, paragraph, table, etc.
-                    },
-                }
-            )
-
-        return documents
+class DocumentParser:
+    def parse(self, file_path: Path) -> str:
+        # placeholder for actual parsing logic
+        # For demonstration, we will just read the file and return its content as JSON
+        
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            
+        except:
+            content = "Binary content or unreadable file"
+            
+        structured = {
+            "filename": file_path.name,
+            "content_preview": content[:1000]
+        }
+        
+        return json.dumps(structured, indent=2)
