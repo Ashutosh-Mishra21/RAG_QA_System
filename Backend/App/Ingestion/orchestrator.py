@@ -5,6 +5,9 @@ from backend.app.ingestion.docling_parser import DoclingParser
 from backend.app.ingestion.structure_builder import StructureBuilder
 from backend.app.ingestion.node_chunker import NodeChunker
 from backend.app.ingestion.tree_flattener import flatten_tree
+from ingestion.enrichment import ChunkEnricher
+from indexing.embedder import Embedder
+from indexing.vector_store import VectorStore
 
 
 class IngestionOrchestrator:
@@ -46,3 +49,21 @@ class IngestionOrchestrator:
             "flat_file": str(flat_output_path),
             "num_chunks": len(flat_chunks),
         }
+
+
+class EmbeddingPipeline:
+    def __init__(self):
+        self.enricher = ChunkEnricher()
+        self.embedder = Embedder()
+        self.vector_store = VectorStore()
+
+    def process_chunks(self, chunks):
+        # 1️⃣ Enrich ALL chunks
+        enriched = [self.enricher.enrich(chunk) for chunk in chunks]
+
+        # 2️⃣ Embed
+        texts = [c.content for c in enriched]
+        embeddings = self.embedder.embed_texts(texts)
+
+        # 3️⃣ Store
+        self.vector_store.upsert_chunks(enriched, embeddings)

@@ -1,21 +1,24 @@
-﻿from dataclasses import dataclass
-from typing import Iterable, List
+﻿# indexing/embedder.py
+
+from sentence_transformers import SentenceTransformer
+from typing import List
+import torch
 
 
-@dataclass
-class SentenceTransformerEmbedder:
-    model_name: str = "all-MiniLM-L6-v2"
+class Embedder:
+    def __init__(
+        self, model_name: str = "BAAI/bge-large-en-v1.5", batch_size: int = 32
+    ):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = SentenceTransformer(model_name, device=self.device)
+        self.batch_size = batch_size
 
-    def __post_init__(self) -> None:
-        try:
-            from sentence_transformers import SentenceTransformer
-        except ImportError as exc:
-            raise ImportError(
-                "sentence-transformers is required for embeddings. "
-                "Install it with `pip install sentence-transformers`."
-            ) from exc
-
-        self._model = SentenceTransformer(self.model_name)
-
-    def embed(self, texts: Iterable[str]) -> List[List[float]]:
-        return self._model.encode(list(texts), normalize_embeddings=True).tolist()
+    def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        embeddings = self.model.encode(
+            texts,
+            batch_size=self.batch_size,
+            convert_to_numpy=True,
+            show_progress_bar=True,
+            normalize_embeddings=True,
+        )
+        return embeddings.tolist()
