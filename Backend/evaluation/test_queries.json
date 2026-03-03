@@ -1,0 +1,14 @@
+[
+  {
+    "query": "What is cosine similarity?",
+    "relevant_document_ids": ["embedding_doc"]
+  },
+  {
+    "query": "How does chunking work?",
+    "relevant_document_ids": ["chunking_doc"]
+  },
+  {
+    "query": "What is metadata filtering?",
+    "relevant_document_ids": ["metadata_doc"]
+  }
+]

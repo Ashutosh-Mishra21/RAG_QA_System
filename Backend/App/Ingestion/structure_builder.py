@@ -1,10 +1,14 @@
 import re
 import uuid
+
+from mpmath import root
 from backend.app.models.document_structure import DocumentNode
 from docling_core.types.doc import DocItemLabel
 
 
 def infer_level_from_heading(text: str):
+    if text.startswith("#"):
+        return text.count("#")
     match = re.match(r"^(\d+(?:\.\d+)*)", text)
     if match:
         number = match.group(1)
@@ -20,8 +24,8 @@ class StructureBuilder:
         roots = []
 
         for element, _ in document.iterate_items():
-
-            if element.label.name == "section_header":
+            label = element.label.name.upper()
+            if label in ["SECTION_HEADER", "TITLE"]:
 
                 heading_text = element.text.strip()
                 level = infer_level_from_heading(heading_text)
@@ -46,7 +50,7 @@ class StructureBuilder:
 
                 stack.append(node)
 
-            elif element.label.name in ["text", "list_item"]:
+            elif label in ["TEXT", "LIST_ITEM"]:
 
                 if stack:
                     parent_node = stack[-1]

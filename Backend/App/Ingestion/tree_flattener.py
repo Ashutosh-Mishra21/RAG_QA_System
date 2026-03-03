@@ -16,7 +16,7 @@ def flatten_tree(nodes, parent_chain=None):
                     "node_id": node.node_id,
                     "heading_path": new_chain,
                     "text": chunk.text,
-                    "token_count": chunk.token_count,
+                    "token_count": chunk.tokens_count,
                 }
             )
 

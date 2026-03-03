@@ -1,48 +1,57 @@
 ﻿from keybert import KeyBERT
-import spacy
 from sentence_transformers import SentenceTransformer
 from typing import List
 from backend.app.models.chunk import Chunk
-import numpy as np
+import torch
 
 
 class ChunkEnricher:
+    def __init__(
+        self,
+        embedding_model: str = "BAAI/bge-base-en-v1.5",
+        top_k_keywords: int = 5,
+    ):
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    def __init__(self):
-        # GPU-enabled embedding model for keyword extraction
-        self.keyword_model = KeyBERT(
-            model=SentenceTransformer("all-MiniLM-L6-v2", device="cuda")
-        )
+        # Shared embedding model (GPU enabled if available)
+        self.embedding_model = SentenceTransformer(embedding_model, device=self.device)
 
-        # GPU NER
-        self.ner = spacy.load("en_core_web_sm")
+        self.keyword_model = KeyBERT(model=self.embedding_model)
 
-    def extract_keywords(self, text: str, top_k: int = 5) -> List[str]:
+        self.top_k_keywords = top_k_keywords
+
+    def extract_keywords(self, text: str) -> List[str]:
+        if not text.strip():
+            return []
+
         keywords = self.keyword_model.extract_keywords(
             text,
             keyphrase_ngram_range=(1, 2),
             stop_words="english",
-            top_n=top_k,
+            top_n=self.top_k_keywords,
         )
+
         return [kw[0] for kw in keywords]
 
-    def extract_entities(self, text: str) -> List[str]:
-        doc = self.ner(text)
-        return list(set([ent.text for ent in doc.ents]))
+    def compute_importance(self, text: str, keywords: List[str]) -> float:
+        """
+        Importance heuristic:
+        - Longer chunks slightly more important
+        - Keyword-rich chunks slightly more important
+        """
+        length_score = min(len(text) / 1200, 1.0)
+        keyword_bonus = min(len(keywords) * 0.05, 0.2)
 
-    def compute_importance(self, text: str) -> float:
-        # simple heuristic: longer + entity-rich chunks are important
-        length_score = min(len(text) / 1000, 1.0)
-        entity_bonus = (
-            0.1 if len(text) > 0 and len(self.extract_entities(text)) > 0 else 0.0
-        )
-        return round(min(length_score + entity_bonus, 1.0), 3)
+        score = min(length_score + keyword_bonus, 1.0)
+        return round(score, 3)
 
     def enrich(self, chunk: Chunk) -> Chunk:
         text = chunk.content
 
-        chunk.metadata.keywords = self.extract_keywords(text)
-        chunk.metadata.entities = self.extract_entities(text)
-        chunk.metadata.importance_score = self.compute_importance(text)
+        keywords = self.extract_keywords(text)
+
+        chunk.metadata.keywords = keywords
+        chunk.metadata.entities = []  # Removed spaCy NER
+        chunk.metadata.importance_score = self.compute_importance(text, keywords)
 
         return chunk

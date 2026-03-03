@@ -23,7 +23,7 @@ class NodeChunker:
                         chunk_id=str(uuid.uuid4()),
                         node_id=node.node_id,
                         text=buffer.strip(),
-                        token_count=token_count,
+                        tokens_count=token_count,
                     )
                 )
                 buffer = text
@@ -35,7 +35,7 @@ class NodeChunker:
                     chunk_id=str(uuid.uuid4()),
                     node_id=node.node_id,
                     text=buffer.strip(),
-                    token_count=token_count,
+                    tokens_count=token_count,
                 )
             )
 
