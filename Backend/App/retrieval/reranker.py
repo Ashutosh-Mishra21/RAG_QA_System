@@ -1,7 +1,4 @@
-﻿import decimal
-from turtle import mode
-
-from sentence_transformers import CrossEncoder
+﻿from sentence_transformers import CrossEncoder
 import torch
 from typing import List, Dict
 
