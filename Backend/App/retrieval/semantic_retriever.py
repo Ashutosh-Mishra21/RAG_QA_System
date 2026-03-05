@@ -52,14 +52,15 @@ class SemanticRetriever:
             collection_name=self.collection_name,
             query=query_vector,
             query_filter=search_filter,
-            limit=20,  # Retrieve more than top_k for reranking
+            limit=max(top_k * 5, 50),  # Retrieve more than top_k for reranking
             with_payload=True,
         ).points
         # 4️⃣ Format Output
         retrieved_chunks = [
             {
+                "id": hit.id,
+                "text": hit.payload.get("content"),
                 "score": hit.score,
-                "content": hit.payload.get("content"),
                 "metadata": hit.payload,
             }
             for hit in results
