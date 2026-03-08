@@ -186,5 +186,3 @@ Metrics helpers are in `Backend/evaluation/metrics.py`.
 The repository uses `Backend/App/...` on disk, while many Python imports reference `backend.app...`. On case-sensitive environments this may require path/package normalization.
 
 ---
-
-If you want, I can next add a **“Quickstart (known working commands)”** section with exact commands to run ingestion, Qdrant, and a retrieval smoke test in this environment.
