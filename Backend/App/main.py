@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .api.routes import chat, evaluation, health, upload
+from backend.app.api.routes import chat, evaluation, health, upload
 
 
 class AppPaths:

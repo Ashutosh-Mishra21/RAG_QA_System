@@ -1,6 +1,6 @@
 ﻿from typing import Dict, List
 
-from ..models.response import Response
+from backend.app.models.response import Response
 
 
 class AnswerGenerator:

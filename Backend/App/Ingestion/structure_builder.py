@@ -1,7 +1,5 @@
 import re
 import uuid
-
-from mpmath import root
 from backend.app.models.document_structure import DocumentNode
 from docling_core.types.doc import DocItemLabel
 

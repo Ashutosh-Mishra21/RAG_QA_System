@@ -1,6 +1,6 @@
-from app.retrieval.semantic_retriever import SemanticRetriever
-from app.retrieval.hybrid_retriever import HybridRetriever
-from app.retrieval.reranker import CrossEncoderReranker
+from backend.app.retrieval.semantic_retriever import SemanticRetriever
+from backend.app.retrieval.hybrid_retriever import HybridRetriever
+from backend.app.retrieval.reranker import CrossEncoderReranker
 from backend.evaluation.evaluator import evaluate
 from backend.app.api.routes.upload import upload_document
 

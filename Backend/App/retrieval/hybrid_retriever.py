@@ -1,68 +1,56 @@
+from rank_bm25 import BM25Okapi
 import numpy as np
-from backend.app.retrieval.semantic_retriever import SemanticRetriever
-from backend.app.retrieval.bm25_retriever import BM25Retriever
-from backend.app.retrieval.reranker import CrossEncoderReranker
+
+from app.retrieval.semantic_retriever import SemanticRetriever
 
 
 class HybridRetriever:
 
-    def __init__(self, documents):
+    def __init__(self):
+        self.dense = SemanticRetriever()
 
-        self.dense_retriever = SemanticRetriever()
-        self.bm25_retriever = BM25Retriever(documents)
-        self.reranker = CrossEncoderReranker()
-        # fusion weights
-        self.rrf_k = 60
+        self.dense_weight = 0.6
+        self.bm25_weight = 0.4
 
-    def reciprocal_rank_fusion(self, dense_results, bm25_results):
+    def retrieve(self, query, top_k=5, candidate_k=40):
 
-        score_dict = {}
+        # Step 1: dense retrieval from Qdrant
+        dense_results = self.dense.retrieve(query, top_k=candidate_k)
 
-        # dense ranks
-        for rank, r in enumerate(dense_results):
-            score = 1 / (self.rrf_k + rank + 1)
+        corpus = [r["text"] for r in dense_results]
+        tokenized_corpus = [doc.split() for doc in corpus]
 
-            if r["id"] not in score_dict:
-                score_dict[r["id"]] = {
+        bm25 = BM25Okapi(tokenized_corpus)
+
+        tokenized_query = query.split()
+
+        bm25_scores = bm25.get_scores(tokenized_query)
+
+        dense_scores = np.array([r["score"] for r in dense_results])
+
+        if dense_scores.max() > 0:
+            dense_scores = dense_scores / dense_scores.max()
+
+        if bm25_scores.max() > 0:
+            bm25_scores = bm25_scores / bm25_scores.max()
+
+        fused_results = []
+
+        for i, r in enumerate(dense_results):
+
+            final_score = (
+                self.dense_weight * dense_scores[i] + self.bm25_weight * bm25_scores[i]
+            )
+
+            fused_results.append(
+                {
                     "id": r["id"],
                     "text": r["text"],
                     "metadata": r["metadata"],
-                    "score": 0,
+                    "score": final_score,
                 }
+            )
 
-            score_dict[r["id"]]["score"] += score
+        fused_results.sort(key=lambda x: x["score"], reverse=True)
 
-        # bm25 ranks
-        for rank, r in enumerate(bm25_results):
-            score = 1 / (self.rrf_k + rank + 1)
-
-            if r["id"] not in score_dict:
-                score_dict[r["id"]] = {
-                    "id": r["id"],
-                    "text": r["text"],
-                    "metadata": r["metadata"],
-                    "score": 0,
-                }
-
-            score_dict[r["id"]]["score"] += score
-
-        return list(score_dict.values())
-
-    def retrieve(self, query, top_k=5):
-
-        dense_results = self.dense_retriever.retrieve(
-            query, top_k=top_k * 5, rerank=False
-        )
-        bm25_results = self.bm25_retriever.retrieve(
-            query, top_k=top_k * 5, rerank=False
-        )
-
-        fused = self.reciprocal_rank_fusion(dense_results, bm25_results)
-
-        fused.sort(key=lambda x: x["score"], reverse=True)
-
-        top_candidates = fused[: top_k * 4]
-
-        reranked = self.reranker.rerank(query, top_candidates)
-
-        return reranked[:top_k]
+        return fused_results[:top_k]
