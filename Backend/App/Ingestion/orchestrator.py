@@ -7,6 +7,7 @@ from backend.app.ingestion.tree_flattener import flatten_tree
 from backend.app.ingestion.enrichment import ChunkEnricher
 from backend.app.indexing.embedder import Embedder
 from backend.app.indexing.vector_store import VectorStore
+from backend.app.indexing.schema_manager import SchemaManager
 
 
 class IngestionOrchestrator:
@@ -15,7 +16,6 @@ class IngestionOrchestrator:
         self.raw_dir = data_dir / "raw"
         self.processed_dir = data_dir / "processed"
         self.processed_dir.mkdir(parents=True, exist_ok=True)
-
         self.parser = DoclingParser()
         self.builder = StructureBuilder()
         self.chunker = NodeChunker()
@@ -57,12 +57,15 @@ class EmbeddingPipeline:
         self.vector_store = VectorStore()
 
     def process_chunks(self, chunks):
-        # 1️⃣ Enrich ALL chunks
+        if not chunks:
+            return
+
         enriched = [self.enricher.enrich(chunk) for chunk in chunks]
 
-        # 2️⃣ Embed
         texts = [c.content for c in enriched]
         embeddings = self.embedder.embed_texts(texts)
 
-        # 3️⃣ Store
+        if not embeddings:
+            return
+
         self.vector_store.upsert_chunks(enriched, embeddings)

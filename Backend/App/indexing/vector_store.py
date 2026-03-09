@@ -9,16 +9,20 @@ class VectorStore:
     def __init__(
         self,
         collection_name: str = "documents",
-        vector_size: int = 1024,
         host: str = "localhost",
         port: int = 6333,
     ):
         self.collection_name = collection_name
         self.client = QdrantClient(host=host, port=port)
-        self._create_collection(vector_size)
 
-    def _create_collection(self, vector_size: int):
-        self.client.recreate_collection(
+    def _ensure_collection(self, vector_size: int):
+        collections = self.client.get_collections().collections
+        existing = [c.name for c in collections]
+
+        if self.collection_name in existing:
+            return
+
+        self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=VectorParams(
                 size=vector_size,
@@ -26,11 +30,13 @@ class VectorStore:
             ),
         )
 
-    def upsert_chunks(
-        self,
-        chunks: List[Chunk],
-        embeddings: List[List[float]]
-    ):
+    def upsert_chunks(self, chunks: List[Chunk], embeddings: List[List[float]]):
+        if not chunks or not embeddings:
+            return
+
+        vector_size = len(embeddings[0])
+        self._ensure_collection(vector_size)
+
         points = []
 
         for chunk, vector in zip(chunks, embeddings):

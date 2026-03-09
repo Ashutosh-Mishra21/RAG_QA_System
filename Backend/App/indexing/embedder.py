@@ -1,6 +1,4 @@
-﻿# indexing/embedder.py
-
-from sentence_transformers import SentenceTransformer
+﻿from sentence_transformers import SentenceTransformer
 from typing import List
 import torch
 
