@@ -5,46 +5,73 @@ from backend.evaluation.metrics import recall_at_k, mrr_at_k, ndcg_at_k
 
 
 class RetrievalEvaluator:
+
     def __init__(self, test_file: str, top_k: int = 5):
         self.test_file = test_file
         self.top_k = top_k
-        self.retriever = SemanticRetriever(top_k=top_k)
+        self.test_queries = self._load_test_queries()
 
-    def evaluate(self, rerank: bool = True) -> Dict[str, float]:
+    def _load_test_queries(self):
+        import json
+
         with open(self.test_file, "r") as f:
-            test_queries = json.load(f)
+            return json.load(f)
 
-        recall_scores = []
-        mrr_scores = []
-        ndcg_scores = []
 
-        for item in test_queries:
+    def evaluate_retriever(self, retriever, reranker=None):
+
+        all_metrics = []
+
+        for item in self.test_queries:
             query = item["query"]
-            relevant_ids = item["relevant_document_ids"]
+            relevant_ids = set(item["relevant_ids"])
 
-            results = self.retriever.retrieve(query=query, rerank=rerank)
+            results = retriever.retrieve(query, top_k=self.top_k)
 
-            seen = set()
-            retrieved_ids = []
+            if reranker:
+                results = reranker.rerank(query, results)
 
-            for r in results:
-                doc_id = r["metadata"]["document_id"]
-                if doc_id not in seen:
-                    retrieved_ids.append(doc_id)
-                    seen.add(doc_id)
+            retrieved_ids = [r["id"] for r in results]
 
-            recall_scores.append(recall_at_k(retrieved_ids, relevant_ids, self.top_k))
+            metrics = self._compute_metrics(relevant_ids, retrieved_ids)
+            all_metrics.append(metrics)
 
-            mrr_scores.append(mrr_at_k(retrieved_ids, relevant_ids, self.top_k))
+        return self._aggregate_metrics(all_metrics)
 
-            ndcg_scores.append(ndcg_at_k(retrieved_ids, relevant_ids, self.top_k))
-            print("Query:", query)
-            print("Retrieved IDs:", retrieved_ids)
-            print("Relevant IDs:", relevant_ids)
-            print("-" * 40)
+    def evaluate_agentic(self, agentic_retriever):
+
+        all_metrics = []
+
+        for item in self.test_queries:
+            query = item["query"]
+            relevant_ids = set(item["relevant_ids"])
+
+            output = agentic_retriever.retrieve(query)
+            results = output["results"]
+
+            retrieved_ids = [r["id"] for r in results]
+
+            metrics = self._compute_metrics(relevant_ids, retrieved_ids)
+            all_metrics.append(metrics)
+
+        return self._aggregate_metrics(all_metrics)
+
+    def _compute_metrics(self, relevant_ids, retrieved_ids):
+
+        recall = recall_at_k(retrieved_ids, list(relevant_ids), self.top_k)
+        mrr = mrr_at_k(retrieved_ids, list(relevant_ids), self.top_k)
+        ndcg = ndcg_at_k(retrieved_ids, list(relevant_ids), self.top_k)
+
+        return {"recall": recall, "mrr": mrr, "ndcg": ndcg}
+
+    def _aggregate_metrics(self, all_metrics):
+
+        recall = sum(m["recall"] for m in all_metrics) / len(all_metrics)
+        mrr = sum(m["mrr"] for m in all_metrics) / len(all_metrics)
+        ndcg = sum(m["ndcg"] for m in all_metrics) / len(all_metrics)
 
         return {
-            "Recall@K": sum(recall_scores) / len(recall_scores),
-            "MRR@K": sum(mrr_scores) / len(mrr_scores),
-            "nDCG@K": sum(ndcg_scores) / len(ndcg_scores),
+            "Recall@K": round(recall, 4),
+            "MRR@K": round(mrr, 4),
+            "nDCG@K": round(ndcg, 4),
         }

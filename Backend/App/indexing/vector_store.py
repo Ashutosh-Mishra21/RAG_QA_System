@@ -2,7 +2,6 @@
 from qdrant_client.models import VectorParams, Distance, PointStruct
 from typing import List
 from backend.app.models.chunk import Chunk
-import uuid
 
 
 class VectorStore:
@@ -42,7 +41,7 @@ class VectorStore:
         for chunk, vector in zip(chunks, embeddings):
             points.append(
                 PointStruct(
-                    id=str(uuid.uuid4()),
+                    id=f"{chunk.document_id}_{chunk.chunk_id}",
                     vector=vector,
                     payload={
                         "chunk_id": chunk.chunk_id,

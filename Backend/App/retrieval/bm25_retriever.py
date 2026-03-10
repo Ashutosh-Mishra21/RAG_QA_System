@@ -31,7 +31,7 @@ class BM25Retriever:
                     "id": self.documents[idx]["id"],
                     "text": self.documents[idx]["text"],
                     "metadata": self.documents[idx]["metadata"],
-                    "bm25_score": float(scores[idx]),
+                    "score": float(scores[idx]),
                 }
             )
 

@@ -1,6 +1,8 @@
 ﻿from dataclasses import dataclass
 from typing import Optional, Dict
 
+from torch.backends.opt_einsum import strategy
+
 
 @dataclass
 class RetrievalStrategy:
@@ -36,7 +38,9 @@ class QueryAnalyzer:
             strategy.query_type = "explanation"
 
         # Metadata Filtering
-        if "figure" in q or "table" in q:
+        if "figure" in q:
             strategy.metadata_filter = {"type": "figure"}
+        elif "table" in q:
+            strategy.metadata_filter = {"type": "table"}
 
         return strategy

@@ -20,7 +20,8 @@ class HybridRetriever:
         # Normalize dense
         dense_scores = np.array([r["score"] for r in dense_results])
         if dense_scores.size > 0 and dense_scores.max() > 0:
-            dense_scores = dense_scores / dense_scores.max()
+            dense_scores = np.exp(dense_scores)
+            dense_scores = dense_scores / dense_scores.sum()
 
         for i, r in enumerate(dense_results):
             score_dict[r["id"]] = {

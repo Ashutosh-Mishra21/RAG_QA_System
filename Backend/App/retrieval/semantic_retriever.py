@@ -1,9 +1,8 @@
 from typing import List, Optional, Dict, Any
 from backend.app.indexing.embedder import Embedder
-from qdrant_client import QdrantClient
 from backend.app.retrieval.reranker import CrossEncoderReranker
 from qdrant_client.models import Filter, FieldCondition, MatchValue
-import torch
+from qdrant_client import QdrantClient
 
 
 class SemanticRetriever:
@@ -18,7 +17,12 @@ class SemanticRetriever:
         self.top_k = top_k
         self.client = QdrantClient(host=host, port=port)
         self.embedder = Embedder()
-        self.reranker = CrossEncoderReranker()
+        self._reranker = None
+
+    def _get_reranker(self):
+        if self._reranker is None:
+            self._reranker = CrossEncoderReranker()
+        return self._reranker
 
     def build_filter(
         self, metadata_filter: Optional[Dict[str, Any]]
@@ -37,7 +41,7 @@ class SemanticRetriever:
         query: str,
         metadata_filters: Optional[Dict[str, Any]] = None,
         top_k: Optional[int] = None,
-        rerank=True,
+        rerank=False,
     ):
         top_k = top_k or self.top_k
 
@@ -52,9 +56,14 @@ class SemanticRetriever:
             collection_name=self.collection_name,
             query=query_vector,
             query_filter=search_filter,
-            limit=max(top_k * 5, 50),  # Retrieve more than top_k for reranking
+            limit=min(
+                max(top_k * 5, 20), 200
+            ),  # Retrieve more than top_k for reranking
             with_payload=True,
         ).points
+
+        if not results:
+            return []
         # 4️⃣ Format Output
         retrieved_chunks = [
             {
@@ -66,7 +75,8 @@ class SemanticRetriever:
             for hit in results
         ]
         if rerank:
-            reranked = self.reranker.rerank(query, retrieved_chunks)
+            reranker = self._get_reranker()
+            reranked = reranker.rerank(query, retrieved_chunks)
             return reranked[:top_k]
 
-        return retrieved_chunks[:top_k]
+        return sorted(retrieved_chunks, key=lambda x: x["score"], reverse=True)[:top_k]
