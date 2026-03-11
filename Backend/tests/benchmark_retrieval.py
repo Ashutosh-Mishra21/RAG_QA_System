@@ -30,19 +30,19 @@ def run_benchmark():
 
     print("=" * 60)
     print("Dense + Rerank")
-    print(evaluator.evaluate_retriever(dense, rerank=True))
+    print(evaluator.evaluate_retriever(dense, reranker=reranker))
 
     print("=" * 60)
     print("Keyword")
     print(evaluator.evaluate_retriever(keyword))
 
     print("=" * 60)
-    print("Hybrid")
+    print("Hybrid (Metadata + Dynamic)")
     print(evaluator.evaluate_retriever(hybrid))
 
     print("=" * 60)
     print("Hybrid + Rerank")
-    print(evaluator.evaluate_retriever(hybrid, rerank=True))
+    print(evaluator.evaluate_retriever(hybrid, reranker=reranker))
 
     print("=" * 60)
     print("Agentic Hybrid")

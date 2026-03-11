@@ -17,7 +17,6 @@ class RetrievalEvaluator:
         with open(self.test_file, "r") as f:
             return json.load(f)
 
-
     def evaluate_retriever(self, retriever, reranker=None):
 
         all_metrics = []
