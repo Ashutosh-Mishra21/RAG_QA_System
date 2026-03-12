@@ -84,7 +84,7 @@ embeddings = embedder.embed_texts([c.content for c in enriched_chunks])
 
 # 9️⃣ Store
 print("Storing in Qdrant...")
-vector_store = VectorStore(vector_size=len(embeddings[0]))
+vector_store = VectorStore()
 vector_store.upsert_chunks(enriched_chunks, embeddings)
 
 print("Done. Docling-based indexing complete.")

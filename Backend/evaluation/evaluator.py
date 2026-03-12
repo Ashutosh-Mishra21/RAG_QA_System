@@ -30,7 +30,9 @@ class RetrievalEvaluator:
             if reranker:
                 results = reranker.rerank(query, results)
 
-            retrieved_ids = [r["id"] for r in results]
+            retrieved_ids = list(
+                dict.fromkeys(r["metadata"]["document_id"] for r in results)
+            )
 
             metrics = self._compute_metrics(relevant_ids, retrieved_ids)
             all_metrics.append(metrics)
@@ -48,7 +50,9 @@ class RetrievalEvaluator:
             output = agentic_retriever.retrieve(query)
             results = output["results"]
 
-            retrieved_ids = [r["id"] for r in results]
+            retrieved_ids = list(
+                dict.fromkeys(r["metadata"]["document_id"] for r in results)
+            )
 
             metrics = self._compute_metrics(relevant_ids, retrieved_ids)
             all_metrics.append(metrics)

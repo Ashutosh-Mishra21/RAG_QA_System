@@ -41,7 +41,7 @@ class VectorStore:
         for chunk, vector in zip(chunks, embeddings):
             points.append(
                 PointStruct(
-                    id=f"{chunk.document_id}_{chunk.chunk_id}",
+                    id=chunk.chunk_id,
                     vector=vector,
                     payload={
                         "chunk_id": chunk.chunk_id,
@@ -55,3 +55,35 @@ class VectorStore:
             collection_name=self.collection_name,
             points=points,
         )
+
+    def fetch_all_documents(self):
+        """
+        Fetch all chunks from Qdrant and return them in BM25 format.
+        """
+
+        documents = []
+
+        points, _ = self.client.scroll(
+            collection_name=self.collection_name,
+            limit=10000,
+            with_payload=True,
+            with_vectors=False,
+        )
+
+        for p in points:
+            payload = p.payload
+
+            documents.append(
+                {
+                    "id": payload.get("chunk_id"),
+                    "text": payload.get("content"),
+                    "metadata": {
+                        "document_id": payload.get("document_id"),
+                        "title": payload.get("title"),
+                        "section": payload.get("section"),
+                        "keywords": payload.get("keywords"),
+                    },
+                }
+            )
+
+        return documents

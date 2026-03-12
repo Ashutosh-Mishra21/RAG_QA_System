@@ -1,14 +1,22 @@
 [
   {
-    "query": "What is cosine similarity?",
-    "relevant_document_ids": ["embedding_doc"]
+    "query": "How do embedding models measure semantic similarity?",
+    "relevant_ids": ["embedding_doc"]
   },
   {
-    "query": "How does chunking work?",
-    "relevant_document_ids": ["chunking_doc"]
+    "query": "Why does hierarchical chunking improve document retrieval?",
+    "relevant_ids": ["chunking_doc"]
   },
   {
-    "query": "What is metadata filtering?",
-    "relevant_document_ids": ["metadata_doc"]
+    "query": "How can metadata be used to filter search results?",
+    "relevant_ids": ["metadata_doc"]
+  },
+  {
+    "query": "Explain vector similarity in embedding models",
+    "relevant_ids": ["embedding_doc"]
+  },
+  {
+    "query": "What techniques improve RAG document chunking?",
+    "relevant_ids": ["chunking_doc"]
   }
 ]
