@@ -1,13 +1,13 @@
 ﻿import json
 from pathlib import Path
-from backend.app.ingestion.docling_parser import DoclingParser
-from backend.app.ingestion.structure_builder import StructureBuilder
-from backend.app.ingestion.node_chunker import NodeChunker
-from backend.app.ingestion.tree_flattener import flatten_tree
-from backend.app.ingestion.enrichment import ChunkEnricher
-from backend.app.indexing.embedder import Embedder
-from backend.app.indexing.vector_store import VectorStore
-from backend.app.indexing.schema_manager import SchemaManager
+from backend.app.ingestion import (
+    DoclingParser,
+    StructureBuilder,
+    NodeChunker,
+    flatten_tree,
+    ChunkEnricher,
+)
+from backend.app.indexing import Embedder, VectorStore, SchemaManager
 
 
 class IngestionOrchestrator:

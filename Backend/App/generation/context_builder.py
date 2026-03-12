@@ -1,8 +1,17 @@
-﻿from typing import Dict, List
+﻿class ContextBuilder:
+    def __init__(self, max_chunks=5):
+        self.max_chunks = max_chunks
 
-from backend.app.models.response import Response
+    def build(self, retrieved_chunks):
+        context_blocks = []
 
+        for i, chunk in enumerate(retrieved_chunks[: self.max_chunks]):
+            meta = chunk.get("metadata", {})
 
-class AnswerGenerator:
-    def generate(self, query: str, context: List[Dict[str, object]]) -> Response:
-        return Response(answer="Not implemented yet.")
+            citation = f"[{i+1}] ({meta.get('doc_id','doc')} | p{meta.get('page','?')} | {meta.get('section','')})"
+
+            block = f"{citation}\n{chunk['text']}"
+
+            context_blocks.append(block)
+
+        return "\n\n".join(context_blocks)

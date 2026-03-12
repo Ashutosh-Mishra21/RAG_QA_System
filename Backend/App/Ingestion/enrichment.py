@@ -1,7 +1,7 @@
 ﻿from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer
 from typing import List
-from backend.app.models.chunk import Chunk
+from backend.app.models import Chunk
 import torch
 
 

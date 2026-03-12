@@ -1,6 +1,6 @@
 import re
 import uuid
-from backend.app.models.document_structure import DocumentNode
+from backend.app.models import DocumentNode
 from docling_core.types.doc import DocItemLabel
 
 

@@ -1,7 +1,7 @@
 ﻿from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 from typing import List
-from backend.app.models.chunk import Chunk
+from backend.app.models import Chunk
 
 
 class VectorStore:

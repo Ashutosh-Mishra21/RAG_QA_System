@@ -1,5 +1,5 @@
 import uuid
-from backend.app.models.document_structure import Chunk
+from backend.app.models import StructureChunk
 
 
 class NodeChunker:
@@ -19,7 +19,7 @@ class NodeChunker:
                 token_count += tokens
             else:
                 merged.append(
-                    Chunk(
+                    StructureChunk(
                         chunk_id=str(uuid.uuid4()),
                         node_id=node.node_id,
                         text=buffer.strip(),
@@ -31,7 +31,7 @@ class NodeChunker:
 
         if buffer:
             merged.append(
-                Chunk(
+                StructureChunk(
                     chunk_id=str(uuid.uuid4()),
                     node_id=node.node_id,
                     text=buffer.strip(),

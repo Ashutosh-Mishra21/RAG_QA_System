@@ -2,7 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-class Chunk(BaseModel):
+class StructureChunk(BaseModel):
     chunk_id: str
     node_id: str
     text: str
@@ -15,7 +15,7 @@ class DocumentNode(BaseModel):
     heading: str
     parent_id: Optional[str] = None
     summary: Optional[str] = None
-    chunks: List[Chunk] = Field(default_factory=list)
+    chunks: List[StructureChunk] = Field(default_factory=list)
     children: List["DocumentNode"] = Field(default_factory=list)
 
 
