@@ -1,0 +1,13 @@
+fastapi
+jinja2
+uvicorn
+python-multipart
+pydantic
+qdrant-client
+sentence-transformers
+torch
+rank-bm25
+numpy
+keybert
+docling
+docling-core
