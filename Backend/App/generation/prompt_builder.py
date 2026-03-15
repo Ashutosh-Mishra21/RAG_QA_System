@@ -1,6 +1,27 @@
-﻿from typing import Dict, List
+﻿class PromptBuilder:
 
+    def build_prompt(self, query, context):
 
-class PromptBuilder:
-    def build(self, query: str, context: List[Dict[str, object]]) -> str:
-        return query
+        system = """
+You are a helpful AI assistant that answers questions using the provided context.
+
+Rules:
+- Only answer using the context
+- If the answer cannot be found, say "I don't know"
+- Cite sources using [number]
+"""
+
+        prompt = f"""
+SYSTEM:
+{system}
+
+CONTEXT:
+{context}
+
+QUESTION:
+{query}
+
+ANSWER:
+"""
+
+        return prompt
