@@ -7,10 +7,31 @@ from backend.app.generation import (
     Generator,
     AnswerValidator,
 )
-from backend.app.models import LL
+from backend.app.models import LLMRouter, OllamaLLM, OpenRouterLLM
+import logging
+from pathlib import Path
+import uuid
+
+logging.basicConfig(level=logging.INFO)
 
 
-def run_pipeline(query, document_path):
+def create_llm():
+    import os
+
+    openrouter = None
+
+    try:
+        if os.getenv("OPENROUTER_API_KEY"):
+            openrouter = OpenRouterLLM("meta-llama/llama-3.2-3b-instruct")
+    except Exception as e:
+        print(f"⚠️ OpenRouter init failed: {e}")
+
+    ollama = OllamaLLM("llama3")
+
+    return LLMRouter(primary=openrouter, fallback=ollama)
+
+
+def run_pipeline(query, document_path, llm):
 
     print("\n==============================")
     print("🚀 STARTING FULL RAG PIPELINE")
@@ -19,18 +40,52 @@ def run_pipeline(query, document_path):
     # ---------------------------
     # 1. INGESTION
     # ---------------------------
-    print("📄 Parsing document...")
+
+
+from pathlib import Path
+import uuid
+
+
+def run_pipeline(query, data_dir, llm):
+
+    print("\n==============================")
+    print("🚀 STARTING FULL RAG PIPELINE")
+    print("==============================\n")
+
+    # ---------------------------
+    # 1. INGESTION (MULTI-FILE)
+    # ---------------------------
+    logging.info("Parsing documents...")
+
+    data_dir = Path(data_dir)
+    files = list(data_dir.glob("*.md"))
+
+    print(f"📂 Found {len(files)} files")
 
     parser = DoclingParser()
-    document = parser.parse(document_path)
-
     chunker = NodeChunker(chunk_size=300)
-    chunks = chunker.chunk(document)
-
     enricher = ChunkEnricher()
-    enriched_chunks = enricher.enrich(chunks)
 
-    print(f"✅ Total chunks created: {len(enriched_chunks)}")
+    all_chunks = []
+
+    for file_path in files:
+        print(f"\n📄 Processing: {file_path.name}")
+
+        document = parser.parse(file_path)
+
+        chunks = chunker.chunk(document)
+
+        enriched = enricher.enrich(chunks)
+
+        # Attach metadata per file (important!)
+        for idx, c in enumerate(enriched):
+            c["metadata"]["document_id"] = file_path.stem
+            c["metadata"]["source_file"] = file_path.name
+            c["metadata"]["chunk_index"] = idx
+
+        all_chunks.extend(enriched)
+
+    print(f"\n✅ Total chunks created: {len(all_chunks)}")
 
     # ---------------------------
     # 2. INDEXING
@@ -38,13 +93,13 @@ def run_pipeline(query, document_path):
     print("\n📦 Indexing...")
 
     embedder = Embedder()
-    embeddings = embedder.encode([c["text"] for c in enriched_chunks])
+    embeddings = embedder.embed_texts([c["text"] for c in all_chunks])
 
     vector_store = VectorStore(collection_name="rag_test")
-    vector_store.upsert(enriched_chunks, embeddings)
+    vector_store.upsert(all_chunks, embeddings)
 
     bm25 = KeywordIndex()
-    bm25.build(enriched_chunks)
+    bm25.build(all_chunks)
 
     print("✅ Indexing complete")
 
@@ -53,19 +108,19 @@ def run_pipeline(query, document_path):
     # ---------------------------
     print("\n🔍 Retrieving...")
 
-    retriever = HybridRetriever(vector_store=vector_store, bm25_index=bm25)
+    retriever = HybridRetriever(dense_retriever=vector_store, keyword_index=bm25)
 
-    retrieved_chunks = retriever.retrieve(query, top_k=5)
+    query_text = query.text if hasattr(query, "text") else query
+    retrieved_chunks = retriever.retrieve(query_text, top_k=5)
 
     print(f"✅ Retrieved {len(retrieved_chunks)} chunks")
 
-    # Debug print
     for i, ch in enumerate(retrieved_chunks):
         print(f"\n--- Chunk {i+1} (score: {ch.get('score', 0):.3f}) ---")
         print(ch["text"][:200])
 
     # ---------------------------
-    # 4. GENERATION (GROUNDED)
+    # 4. GENERATION
     # ---------------------------
     print("\n🧠 Generating grounded answer...")
 
@@ -75,9 +130,7 @@ def run_pipeline(query, document_path):
     prompt_builder = PromptBuilder()
     prompt = prompt_builder.build_prompt(query, context)
 
-    llm = LLMProvider(model="gpt-4o-mini")  # change if needed
     generator = Generator(llm)
-
     answer = generator.generate(prompt)
 
     validator = AnswerValidator()
@@ -111,7 +164,10 @@ def run_pipeline(query, document_path):
 if __name__ == "__main__":
 
     query = "What is cosine similarity?"
+    data_dir = "../data/raw"
 
-    document_path = "data/sample_docs/your_doc.pdf"  # change this
+    # ✅ Create LLM here
+    llm = create_llm()
 
-    run_pipeline(query, document_path)
+    # ✅ Pass it into pipeline
+    run_pipeline(query, data_dir, llm)

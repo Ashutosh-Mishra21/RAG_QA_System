@@ -4,14 +4,17 @@
 
     def build(self, retrieved_chunks):
         context_blocks = []
+        citation_map = {}
 
         for i, chunk in enumerate(retrieved_chunks[: self.max_chunks]):
+            idx = i + 1
+
             meta = chunk.get("metadata", {})
 
-            citation = f"[{i+1}] ({meta.get('doc_id','doc')} | p{meta.get('page','?')} | {meta.get('section','')})"
+            citation_header = f"[{idx}] {meta.get('doc_id','doc')} | p{meta.get('page','?')} | {meta.get('section','')}"
 
-            block = f"{citation}\n{chunk['text']}"
+            context_blocks.append(f"{citation_header}\n{chunk['text']}")
 
-            context_blocks.append(block)
+            citation_map[str(idx)] = {"text": chunk["text"], "metadata": meta}
 
-        return "\n\n".join(context_blocks)
+        return "\n\n".join(context_blocks), citation_map
