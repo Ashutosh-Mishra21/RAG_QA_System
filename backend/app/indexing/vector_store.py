@@ -1,6 +1,13 @@
 ﻿from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
-from typing import List
+from qdrant_client.models import (
+    VectorParams,
+    Distance,
+    PointStruct,
+    Filter,
+    FieldCondition,
+    MatchValue,
+)
+from typing import List, Optional, Dict, Any
 from backend.app.models import Chunk
 
 
@@ -33,57 +40,75 @@ class VectorStore:
         if not chunks or not embeddings:
             return
 
+        if len(chunks) != len(embeddings):
+            raise ValueError("chunks and embeddings length mismatch")
+
         vector_size = len(embeddings[0])
         self._ensure_collection(vector_size)
 
         points = []
-
         for chunk, vector in zip(chunks, embeddings):
             points.append(
                 PointStruct(
-                    id=chunk.chunk_id,
+                    id=chunk.id,
                     vector=vector,
                     payload={
-                        "chunk_id": chunk.chunk_id,
+                        "id": chunk.id,
                         "content": chunk.content,
-                        **chunk.metadata.dict(),
+                        "metadata": chunk.metadata,
                     },
                 )
             )
 
-        self.client.upsert(
+        self.client.upsert(collection_name=self.collection_name, points=points)
+
+    def _build_filter(
+        self, metadata_filters: Optional[Dict[str, Any]]
+    ) -> Optional[Filter]:
+        if not metadata_filters:
+            return None
+        conditions = [
+            FieldCondition(key=f"metadata.{k}", match=MatchValue(value=v))
+            for k, v in metadata_filters.items()
+        ]
+        return Filter(must=conditions)
+
+    def retrieve(
+        self,
+        query_vector: List[float],
+        top_k: int,
+        metadata_filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Chunk]:
+        query_filter = self._build_filter(metadata_filters)
+        points = self.client.query_points(
             collection_name=self.collection_name,
-            points=points,
-        )
-
-    def fetch_all_documents(self):
-        """
-        Fetch all chunks from Qdrant and return them in BM25 format.
-        """
-
-        documents = []
-
-        points, _ = self.client.scroll(
-            collection_name=self.collection_name,
-            limit=10000,
+            query=query_vector,
+            query_filter=query_filter,
+            limit=top_k,
             with_payload=True,
-            with_vectors=False,
-        )
+        ).points
 
+        chunks: List[Chunk] = []
         for p in points:
-            payload = p.payload
-
-            documents.append(
-                {
-                    "id": payload.get("chunk_id"),
-                    "text": payload.get("content"),
-                    "metadata": {
-                        "document_id": payload.get("document_id"),
-                        "title": payload.get("title"),
-                        "section": payload.get("section"),
-                        "keywords": payload.get("keywords"),
-                    },
-                }
+            payload = p.payload or {}
+            chunks.append(
+                Chunk(
+                    id=str(payload.get("id", p.id)),
+                    content=payload.get("content", ""),
+                    metadata=payload.get("metadata", {}),
+                    score=float(p.score) if p.score is not None else None,
+                )
             )
+        return chunks
 
-        return documents
+    def delete_document(self, document_id: str) -> None:
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="metadata.document_id", match=MatchValue(value=document_id)
+                    )
+                ]
+            ),
+        )

@@ -1,4 +1,4 @@
-from retrieval.semantic_retriever import SemanticRetriever
+from backend.app.retrieval import SemanticRetriever
 
 
 def main():

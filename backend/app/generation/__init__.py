@@ -1,4 +1,4 @@
-﻿from .answer_validator import AnswerValidator
+﻿from .validator import AnswerValidator
 from .citation_manager import CitationManager
 from .context_builder import ContextBuilder
 from .generator import Generator

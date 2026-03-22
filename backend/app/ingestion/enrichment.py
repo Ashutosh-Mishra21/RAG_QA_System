@@ -46,12 +46,11 @@ class ChunkEnricher:
         return round(score, 3)
 
     def enrich(self, chunk: Chunk) -> Chunk:
-        text = chunk.content
-
-        keywords = self.extract_keywords(text)
-
-        chunk.metadata.keywords = keywords
-        chunk.metadata.entities = []  # Removed spaCy NER
-        chunk.metadata.importance_score = self.compute_importance(text, keywords)
-
-        return chunk
+        keywords = self.extract_keywords(chunk.content)
+        c = chunk.model_copy(deep=True)
+        c.metadata["keywords"] = keywords
+        c.metadata["entities"] = []
+        c.metadata["importance_score"] = self.compute_importance(
+            chunk.content, keywords
+        )
+        return c

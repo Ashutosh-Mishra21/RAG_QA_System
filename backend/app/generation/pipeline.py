@@ -1,34 +1,41 @@
-class GenerationPipeline:
+from typing import Dict, Any
 
+
+class GenerationPipeline:
     def __init__(
-        self, retriever, context_builder, prompt_builder, generator, validator
+        self, retriever, reranker, context_builder, prompt_builder, generator, validator
     ):
         self.retriever = retriever
+        self.reranker = reranker
         self.context_builder = context_builder
         self.prompt_builder = prompt_builder
         self.generator = generator
         self.validator = validator
 
-    def run(self, query):
+    def run(self, query: str, metadata_filters=None) -> Dict[str, Any]:
+        retrieved = self.retriever.retrieve(
+            query=query, top_k=40, metadata_filters=metadata_filters or {}
+        )
+        reranked = self.reranker.rerank(query, retrieved)
+        top_chunks = reranked[:5]
 
-        retrieved = self.retriever.retrieve(query)
-
-        context, citation_map = self.context_builder.build(retrieved)
-
+        context, citation_map = self.context_builder.build(top_chunks)
         prompt = self.prompt_builder.build_prompt(query, context)
-
         answer = self.generator.generate(prompt)
 
-        validation = self.validator.validate(answer, citation_map)
-
+        validation = self.validator.validate(answer, citation_map, top_chunks)
         if not validation["valid"]:
-            return {"answer": "I don't know", "reason": validation["reason"]}
-
-        confidence = sum(chunk["score"] for chunk in retrieved[:3]) / 3
+            return {
+                "answer": "I don't know",
+                "citations": [],
+                "confidence": validation["confidence"],
+                "sources": [c.metadata for c in top_chunks],
+                "reason": validation["reason"],
+            }
 
         return {
             "answer": answer,
             "citations": validation["citations"],
-            "context": context,
-            "confidence": confidence,
+            "confidence": validation["confidence"],
+            "sources": [c.metadata for c in top_chunks],
         }

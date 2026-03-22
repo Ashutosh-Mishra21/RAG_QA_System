@@ -3,6 +3,8 @@ from backend.app.models import StructureChunk
 
 
 class NodeChunker:
+    def __init__(self, chunk_size=400):
+        self.chunk_size = chunk_size
 
     def merge_chunks(self, node, max_tokens=400):
 

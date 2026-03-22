@@ -71,9 +71,9 @@ pip-wheel-metadata/
 # Data & Generated Artifacts
 # ===============================
 Data/
-Backend/App/Data/
-Backend/App/vector_db/
-Backend/App/processed_chunks/
+backend/app/Data/
+backend/app/vector_db/
+backend/app/processed_chunks/
 **/vector_store/
 **/vectorstores/
 **/embeddings/
