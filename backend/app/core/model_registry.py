@@ -1,6 +1,6 @@
 from threading import Lock
 from typing import Optional
-from backend.app.indexing import Embedder
+from backend.app.indexing import Embedder, KeywordIndex
 from backend.app.retrieval import CrossEncoderReranker
 from backend.app.ingestion import ChunkEnricher
 
@@ -13,6 +13,7 @@ class ModelRegistry:
         self._embedder: Optional[Embedder] = None
         self._reranker: Optional[CrossEncoderReranker] = None
         self._enricher: Optional[ChunkEnricher] = None
+        self._keyword_index: Optional[KeywordIndex] = None
 
     @classmethod
     def instance(cls) -> "ModelRegistry":
@@ -31,7 +32,12 @@ class ModelRegistry:
             self._reranker = CrossEncoderReranker()
         return self._reranker
 
-    def get_keyword_extractor(self) -> ChunkEnricher:
+    def get_enricher(self) -> ChunkEnricher:
         if self._enricher is None:
             self._enricher = ChunkEnricher()
         return self._enricher
+
+    def get_keyword_index(self) -> KeywordIndex:
+        if self._keyword_index is None:
+            self._keyword_index = KeywordIndex()
+        return self._keyword_index

@@ -18,6 +18,11 @@ class OpenRouterLLM:
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY not found in environment")
 
+        try:
+            from openai import OpenAI
+        except Exception as exc:
+            raise RuntimeError("openai package is required for OpenRouterLLM") from exc
+
         self.client = OpenAI(
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",

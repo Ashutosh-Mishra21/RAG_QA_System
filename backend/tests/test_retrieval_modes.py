@@ -1,34 +1,41 @@
-from backend.app.retrieval.semantic_retriever import SemanticRetriever
-from backend.app.retrieval.hybrid_retriever import HybridRetriever
-from backend.app.retrieval.reranker import CrossEncoderReranker
-from backend.evaluation.evaluator import evaluate
-from backend.app.api.routes.upload import upload_document
-
-dense = SemanticRetriever()
-reranker = CrossEncoderReranker()
-
-documents = upload_document()  # same docs used for BM25
-hybrid = HybridRetriever(documents)
+from backend.app.models import Chunk
+from backend.app.retrieval import HybridRetriever
+from backend.app.indexing import KeywordIndex
 
 
-query = "What is cosine similarity?"
+class FakeDense:
+    def retrieve(self, query, top_k=5, metadata_filters=None):
+        return [
+            Chunk(
+                id="x",
+                content="cosine similarity",
+                metadata={"document_id": "embedding_doc"},
+                score=0.8,
+            )
+        ]
 
 
-print("Dense Only")
-dense_results = dense.retrieve(query)
-evaluate(query, dense_results)
+class FakeReranker:
+    def rerank(self, query, chunks):
+        return chunks
 
 
-print("\nDense + Rerank")
-reranked = reranker.rerank(query, dense_results)
-evaluate(query, reranked)
+def test_retrieval_modes():
+    keyword = KeywordIndex()
+    keyword.add(
+        [
+            Chunk(
+                id="x",
+                content="cosine similarity",
+                metadata={"document_id": "embedding_doc"},
+            )
+        ]
+    )
+    hybrid = HybridRetriever(FakeDense(), keyword)
+    reranker = FakeReranker()
 
+    hybrid_results = hybrid.retrieve("What is cosine similarity?", top_k=1)
+    reranked = reranker.rerank("What is cosine similarity?", hybrid_results)
 
-print("\nHybrid")
-hybrid_results = hybrid.retrieve(query)
-evaluate(query, hybrid_results)
-
-
-print("\nHybrid + Rerank")
-hybrid_reranked = reranker.rerank(query, hybrid_results)
-evaluate(query, hybrid_reranked)
+    assert len(hybrid_results) == 1
+    assert reranked[0].id == "x"

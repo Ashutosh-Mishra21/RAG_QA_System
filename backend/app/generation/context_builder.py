@@ -13,7 +13,7 @@ class ContextBuilder:
         for i, chunk in enumerate(retrieved_chunks[: self.max_chunks]):
             idx = i + 1
             meta = chunk.metadata or {}
-            doc_id = meta.get("document_id", "doc")
+            doc_id = meta.get("document_id", "doc") or meta.get("doc_id") or "doc"
             page = meta.get("page_number", "?")
             section = meta.get("section", "")
             citation_header = f"[{idx}] {doc_id} | p{page} | {section}"

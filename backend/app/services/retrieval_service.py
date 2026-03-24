@@ -16,10 +16,10 @@ def main():
 
     for i, r in enumerate(results, 1):
         print(f"Result {i}")
-        print("Score:", round(r["score"], 4))
-        print("Document ID:", r["metadata"].get("document_id"))
-        print("Section:", r["metadata"].get("section"))
-        print("Content:\n", r["content"][:500])
+        print("Score:", round(r.score or 0.0, 4))
+        print("Document ID:", r.metadata.get("document_id"))
+        print("Section:", r.metadata.get("section"))
+        print("Content:\n", r.content[:500])
         print("-" * 80)
 
 

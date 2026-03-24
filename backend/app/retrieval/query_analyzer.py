@@ -1,8 +1,6 @@
 ﻿from dataclasses import dataclass
 from typing import Optional, Dict
 
-from torch.backends.opt_einsum import strategy
-
 
 @dataclass
 class RetrievalStrategy:

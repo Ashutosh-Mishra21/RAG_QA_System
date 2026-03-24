@@ -17,7 +17,6 @@ function scrollToBottom() {
 }
 
 
-// Ask question function
 async function askQuestion() {
     const input = document.getElementById("questionInput");
     const chatBox = document.getElementById("chatBox");
@@ -28,29 +27,39 @@ async function askQuestion() {
     chatBox.innerHTML += `<div class="user-msg">${question}</div>`;
     input.value = "";
 
-    // Placeholder response (RAG comes next)
-    chatBox.innerHTML += `
-        <div class="bot-msg">
-            <div class="bot-answer">
-                This is a placeholder response that will include grounded citations.
-            </div>
-            <div class="bot-meta">
-                <span class="confidence-badge">Confidence: 0.00</span>
-                <div class="sources">
-                    <strong>Sources</strong>
-                    <ul>
-                        <li>Document.pdf · Page 4</li>
-                        <li>Guidelines.docx · Page 2</li>
-                    </ul>
+    try {
+        const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: question })
+        });
+
+        const data = await response.json();
+        const answer = data.answer || "I don't know";
+        const confidence = typeof data.confidence === "number" ? data.confidence.toFixed(2) : "0.00";
+        const sources = (data.sources || []).map((s) => `<li>${s.document_id || "doc"} · ${s.section || "section"}</li>`).join("");
+
+        chatBox.innerHTML += `
+            <div class="bot-msg">
+                <div class="bot-answer">${answer}</div>
+                <div class="bot-meta">
+                    <span class="confidence-badge">Confidence: ${confidence}</span>
+                    <div class="sources">
+                        <strong>Sources</strong>
+                        <ul>${sources}</ul>
+                    </div>
                 </div>
             </div>
-        </div>
-    `;
+        `;
+    } catch (error) {
+        chatBox.innerHTML += `<div class="system-msg">Chat failed.</div>`;
+        console.error(error);
+    }
 
     scrollToBottom();
 }
 
-// Upload files function
+
 function uploadFiles(event) {
     const chatBox = document.getElementById("chatBox");
     const files = event.target.files;
@@ -58,7 +67,7 @@ function uploadFiles(event) {
     if (!files.length) return;
 
     const formData = new FormData();
-    formData.append("file", files[0]); // match backend parameter name
+    formData.append("file", files[0]);
 
     chatBox.innerHTML += `
         <div class="system-msg">
@@ -81,13 +90,11 @@ function uploadFiles(event) {
                     File uploaded successfully.<br>
                     Uploaded: <strong>${data.document.filename}</strong><br>
                     Document ID: <strong>${currentDocumentId || "N/A"}</strong><br>
-                    Structured JSON: <strong>${data.pipeline.structured_output}</strong>
+                    Chunks indexed: <strong>${data.pipeline.chunks_indexed}</strong>
                 </div>
             `;
 
             scrollToBottom();
-
-            console.log("Current Document ID:", currentDocumentId);
         })
         .catch(error => {
             chatBox.innerHTML += `<div class="system-msg">Upload failed.</div>`;

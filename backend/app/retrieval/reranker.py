@@ -1,6 +1,7 @@
-﻿from sentence_transformers import CrossEncoder
+﻿from typing import List
 import torch
-from typing import List, Dict
+from sentence_transformers import CrossEncoder
+from backend.app.models import Chunk
 
 
 class CrossEncoderReranker:
@@ -8,20 +9,17 @@ class CrossEncoderReranker:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = CrossEncoder(model_name, device=self.device)
 
-    def rerank(self, query: str, retrieved_chunks: List[Dict]) -> List[Dict]:
+    def rerank(self, query: str, retrieved_chunks: List[Chunk]) -> List[Chunk]:
         if not retrieved_chunks:
             return []
 
-        # Use standardized key: "text"
-        pairs = [(query, chunk["text"]) for chunk in retrieved_chunks]
-
+        pairs = [(query, chunk.content) for chunk in retrieved_chunks]
         scores = self.model.predict(pairs)
 
+        reranked: List[Chunk] = []
         for chunk, score in zip(retrieved_chunks, scores):
-            chunk["score"] = float(score)
+            c = chunk.model_copy(deep=True)
+            c.score = float(score)
+            reranked.append(c)
 
-        return sorted(
-            retrieved_chunks,
-            key=lambda x: x["score"],
-            reverse=True,
-        )
+        return sorted(reranked, key=lambda x: x.score or 0.0, reverse=True)

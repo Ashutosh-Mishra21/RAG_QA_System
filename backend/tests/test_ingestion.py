@@ -1,90 +1,92 @@
 ﻿from pathlib import Path
-from backend.app.ingestion.docling_parser import DoclingParser
-from backend.app.ingestion.structure_builder import StructureBuilder
-from backend.app.ingestion.node_chunker import NodeChunker
-from backend.app.ingestion.tree_flattener import flatten_tree
-from backend.app.ingestion.enrichment import ChunkEnricher
-from backend.app.indexing.embedder import Embedder
-from backend.app.indexing.vector_store import VectorStore
-from backend.app.models.chunk import ChunkMetadata, Chunk
-import uuid
 
-# 1️⃣ Load all files
-data_dir = Path("data/raw")
-files = list(data_dir.glob("*.md"))
+from backend.app.models import Chunk
+from backend.app.services import IngestionService
 
-print(f"Found {len(files)} files.")
 
-all_chunks = []
+class FakeParser:
+    def parse(self, file_path):
+        return "doc"
 
-for file_path in files:
-    print(f"Processing: {file_path.name}")
 
-    # 2️⃣ Parse using Docling
-    parser = DoclingParser()
-    parsed_doc = parser.parse(file_path)
+class FakeBuilder:
+    def build_tree(self, document):
+        return ["root"]
 
-    # 3️⃣ Build hierarchical structure
-    tree_builder = StructureBuilder()
-    tree = tree_builder.build_tree(parsed_doc)
-    print("Number of root nodes:", len(tree))
-    
-    # 4️⃣ Chunk tree
-    chunker = NodeChunker()
-    all_flat_chunks = []
 
-    for root in tree:
-        chunker.merge_chunks(root, max_tokens=800)
+class FakeChunker:
+    def merge_chunks(self, node):
+        return None
 
-        # Flatten each root after chunking
-        flat_chunks = flatten_tree([root])
 
-        all_flat_chunks.extend(flat_chunks)
+def test_ingest_and_index(monkeypatch, tmp_path):
+    storage = tmp_path / "data"
+    raw = storage / "raw"
+    raw.mkdir(parents=True)
+    file_path = raw / "doc1.md"
+    file_path.write_text("content", encoding="utf-8")
 
-    # 6️⃣ Convert to Chunk model
-    for idx, flat in enumerate(all_flat_chunks):
+    monkeypatch.setattr(
+        "backend.app.services.ingestion_service.DoclingParser", lambda: FakeParser()
+    )
+    monkeypatch.setattr(
+        "backend.app.services.ingestion_service.StructureBuilder", lambda: FakeBuilder()
+    )
+    monkeypatch.setattr(
+        "backend.app.services.ingestion_service.NodeChunker", lambda: FakeChunker()
+    )
+    monkeypatch.setattr(
+        "backend.app.services.ingestion_service.flatten_tree",
+        lambda tree: [
+            {
+                "text": "chunk one",
+                "heading_path": [{"heading": "Intro"}],
+            }
+        ],
+    )
 
-        heading_path = flat["heading_path"]
+    class FakeEnricher:
+        def enrich(self, chunk: Chunk) -> Chunk:
+            return chunk
 
-        # Title = first heading in chain
-        title = heading_path[0]["heading"] if heading_path else None
+    class FakeEmbedder:
+        def embed_texts(self, texts):
+            return [[0.1, 0.2] for _ in texts]
 
-        # Section = last heading in chain
-        section = heading_path[-1]["heading"] if heading_path else None
+    class FakeKeyword:
+        def __init__(self):
+            self.docs = []
 
-        hierarchy_path = [h["heading"] for h in heading_path]
+        def add(self, docs):
+            self.docs.extend(docs)
 
-        metadata = ChunkMetadata(
-            document_id=file_path.stem,
-            source_file=file_path.name,
-            document_type="research",
-            title=title,
-            section=section,
-            hierarchy_path=hierarchy_path,
-            chunk_index=idx,
-        )
+    class FakeRegistry:
+        def __init__(self):
+            self.keyword = FakeKeyword()
 
-        chunk = Chunk(
-            chunk_id=flat["chunk_id"],
-            content=flat["text"],
-            metadata=metadata,
-        )
+        def get_enricher(self):
+            return FakeEnricher()
 
-        all_chunks.append(chunk)
+        def get_embedder(self):
+            return FakeEmbedder()
 
-# 7️⃣ Enrich
-print("Enriching...")
-enricher = ChunkEnricher()
-enriched_chunks = [enricher.enrich(c) for c in all_chunks]
+        def get_keyword_index(self):
+            return self.keyword
 
-# 8️⃣ Embed
-print("Embedding...")
-embedder = Embedder()
-embeddings = embedder.embed_texts([c.content for c in enriched_chunks])
+    class FakeStore:
+        def upsert_chunks(self, chunks, embeddings):
+            assert len(chunks) == len(embeddings) == 1
 
-# 9️⃣ Store
-print("Storing in Qdrant...")
-vector_store = VectorStore()
-vector_store.upsert_chunks(enriched_chunks, embeddings)
+    monkeypatch.setattr(
+        "backend.app.services.ingestion_service.ModelRegistry.instance",
+        lambda: FakeRegistry(),
+    )
+    monkeypatch.setattr(
+        "backend.app.services.ingestion_service.VectorStore", lambda: FakeStore()
+    )
 
-print("Done. Docling-based indexing complete.")
+    service = IngestionService(storage)
+    result = service.ingest_and_index(str(file_path))
+
+    assert result["document_id"] == "doc1"
+    assert result["chunks_indexed"] == 1

@@ -18,6 +18,7 @@ class Embedder:
     ):
         if cache_path is None:
             cache_path = BASE_DIR / "data/embeddings/embedding_cache.json"
+        self.model_name = model_name
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = SentenceTransformer(model_name, device=self.device)
         self.batch_size = batch_size
@@ -26,13 +27,15 @@ class Embedder:
         self._cache: Dict[str, List[float]] = self._load_cache()
 
     def _hash_text(self, text: str) -> str:
-        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+        payload = f"{self.model_name}::normalized::{text}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def _load_cache(self) -> Dict[str, List[float]]:
         if not self.cache_file.exists():
             return {}
         try:
-            return json.loads(self.cache_file.read_text(encoding="utf-8"))
+            data = json.loads(self.cache_file.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
         except Exception:
             return {}
 
@@ -43,14 +46,15 @@ class Embedder:
         if not texts:
             return []
 
-        results: List[List[float]] = [None] * len(texts)  # type: ignore
-        to_embed = []
-        to_embed_idx = []
+        results: List[List[float] | None] = [None] * len(texts)
+        to_embed: List[str] = []
+        to_embed_idx: List[int] = []
 
         for i, text in enumerate(texts):
             key = self._hash_text(text)
-            if key in self._cache:
-                results[i] = self._cache[key]
+            cached = self._cache.get(key)
+            if isinstance(cached, list) and cached:
+                results[i] = cached
             else:
                 to_embed.append(text)
                 to_embed_idx.append(i)
@@ -71,4 +75,4 @@ class Embedder:
 
             self._save_cache()
 
-        return results
+        return [r or [] for r in results]
