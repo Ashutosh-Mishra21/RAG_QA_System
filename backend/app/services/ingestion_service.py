@@ -10,7 +10,7 @@ from backend.app.ingestion import (
     flatten_tree,
 )
 from backend.app.indexing import VectorStore
-from backend.app.models import Chunk
+from backend.app.models import Chunk, ChunkMetadata
 
 
 class IngestionService:
@@ -55,20 +55,30 @@ class IngestionService:
         chunks: List[Chunk] = []
         for idx, flat in enumerate(flat_chunks):
             heading_path = flat.get("heading_path", [])
-            section = heading_path[-1]["heading"] if heading_path else ""
-            chunks.append(
-                Chunk(
-                    id=str(uuid.uuid4()),
-                    content=flat.get("text", ""),
-                    metadata={
-                        "document_id": document_id,
-                        "source_file": fp.name,
-                        "section": section,
-                        "hierarchy_path": [h.get("heading", "") for h in heading_path],
-                        "chunk_index": idx,
-                    },
+            hierarchy_path = [h.get("heading", "") for h in heading_path]
+            section = hierarchy_path[-1] if hierarchy_path else None
+            title = hierarchy_path[0] if hierarchy_path else None
+
+            chunk = Chunk(
+                id=str(uuid.uuid4()),
+                content=flat.get("text", ""),
+            )
+            chunk.attach_metadata(
+                ChunkMetadata(
+                    document_id=document_id,
+                    source_file=fp.name,
+                    document_type=fp.suffix.lstrip(".") or "unknown",
+                    title=title,
+                    section=section,
+                    subsection=flat.get("subsection"),
+                    hierarchy_path=hierarchy_path,
+                    page_number=flat.get("page_number"),
+                    chunk_index=idx,
+                    summary=flat.get("summary"),
+                    language=flat.get("language", "en"),
                 )
             )
+            chunks.append(chunk)
 
         registry = ModelRegistry.instance()
         enricher = registry.get_enricher()

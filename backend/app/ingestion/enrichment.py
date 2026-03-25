@@ -1,7 +1,7 @@
 ﻿from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer
 from typing import List
-from backend.app.models import Chunk
+from backend.app.models import Chunk, ChunkMetadata
 import torch
 
 
@@ -48,9 +48,17 @@ class ChunkEnricher:
     def enrich(self, chunk: Chunk) -> Chunk:
         keywords = self.extract_keywords(chunk.content)
         c = chunk.model_copy(deep=True)
+        importance = self.compute_importance(chunk.content, keywords)
+
+        if c.structured_metadata:
+            meta: ChunkMetadata = c.structured_metadata.model_copy(deep=True)
+            meta.keywords = keywords
+            meta.entities = []
+            meta.importance_score = importance
+            c.attach_metadata(meta)
+            return c
+
         c.metadata["keywords"] = keywords
         c.metadata["entities"] = []
-        c.metadata["importance_score"] = self.compute_importance(
-            chunk.content, keywords
-        )
+        c.metadata["importance_score"] = importance
         return c

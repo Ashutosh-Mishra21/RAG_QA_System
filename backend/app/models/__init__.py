@@ -1,4 +1,4 @@
-﻿from .chunk import Chunk
+﻿from .chunk import Chunk, ChunkMetadata, flatten_metadata
 from .document_structure import StructureChunk, DocumentNode, DocumentTree
 
 from .document import (
@@ -15,6 +15,8 @@ from .response import Response
 
 __all__ = [
     "Chunk",
+    "ChunkMetadata",
+    "flatten_metadata",
     "StructureChunk",
     "DocumentNode",
     "DocumentTree",

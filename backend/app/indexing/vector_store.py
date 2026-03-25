@@ -8,7 +8,7 @@ from qdrant_client.models import (
     MatchValue,
 )
 from typing import List, Optional, Dict, Any
-from backend.app.models import Chunk
+from backend.app.models import Chunk, ChunkMetadata
 
 
 class VectorStore:
@@ -48,14 +48,15 @@ class VectorStore:
 
         points = []
         for chunk, vector in zip(chunks, embeddings):
+            record = chunk.to_vector_record()
             points.append(
                 PointStruct(
-                    id=chunk.id,
+                    id=record["id"],
                     vector=vector,
                     payload={
-                        "id": chunk.id,
-                        "content": chunk.content,
-                        "metadata": chunk.metadata,
+                        "id": record["id"],
+                        "content": record["content"],
+                        "metadata": record["metadata"],
                     },
                 )
             )
@@ -91,15 +92,52 @@ class VectorStore:
         chunks: List[Chunk] = []
         for p in points:
             payload = p.payload or {}
-            chunks.append(
-                Chunk(
-                    id=str(payload.get("id", p.id)),
-                    content=payload.get("content", ""),
-                    metadata=payload.get("metadata", {}),
-                    score=float(p.score) if p.score is not None else None,
-                )
+            metadata = payload.get("metadata", {})
+            chunk = Chunk(
+                id=str(payload.get("id", p.id)),
+                content=payload.get("content", ""),
+                metadata=metadata if isinstance(metadata, dict) else {},
+                score=float(p.score) if p.score is not None else None,
             )
+            structured = self._try_build_structured_metadata(chunk.metadata)
+            if structured is not None:
+                chunk.structured_metadata = structured
+            chunks.append(chunk)
         return chunks
+
+    def _try_build_structured_metadata(
+        self, metadata: Dict[str, Any]
+    ) -> Optional[ChunkMetadata]:
+        try:
+            hierarchy = metadata.get("hierarchy_path")
+            if isinstance(hierarchy, str):
+                hierarchy_path = [
+                    p.strip() for p in hierarchy.split(" > ") if p.strip()
+                ]
+            elif isinstance(hierarchy, list):
+                hierarchy_path = [str(p) for p in hierarchy if str(p).strip()]
+            else:
+                hierarchy_path = []
+
+            return ChunkMetadata(
+                document_id=str(metadata["document_id"]),
+                source_file=str(metadata["source_file"]),
+                document_type=str(metadata["document_type"]),
+                title=metadata.get("title"),
+                section=metadata.get("section"),
+                subsection=metadata.get("subsection"),
+                hierarchy_path=hierarchy_path,
+                page_number=metadata.get("page_number"),
+                chunk_index=int(metadata["chunk_index"]),
+                summary=metadata.get("summary"),
+                keywords=list(metadata.get("keywords", [])),
+                entities=list(metadata.get("entities", [])),
+                importance_score=metadata.get("importance_score"),
+                language=str(metadata.get("language", "en")),
+                created_at=metadata.get("created_at"),
+            )
+        except Exception:
+            return None
 
     def delete_document(self, document_id: str) -> None:
         self.client.delete(

@@ -1,7 +1,5 @@
 from dotenv import load_dotenv
 import os
-from openai import OpenAI
-from pathlib import Path
 import requests
 import logging
 
