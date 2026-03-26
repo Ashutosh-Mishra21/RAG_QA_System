@@ -1,10 +1,12 @@
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 import os
 import requests
 import logging
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
-load_dotenv()
+
+load_dotenv(find_dotenv())
 
 
 class OpenRouterLLM:
@@ -31,15 +33,18 @@ class OpenRouterLLM:
         )
 
     def generate(self, prompt: str) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": "You are a helpful AI assistant."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.0,
-        )
-        return response.choices[0].message.content.strip()
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                timeout=60,
+            )
+            return response.choices[0].message.content.strip()
+
+        except Exception as e:
+            print("\n🔥 OPENROUTER ERROR:", repr(e), "\n")
+            raise
 
 
 class OllamaLLM:
@@ -48,6 +53,7 @@ class OllamaLLM:
         self.base_url = base_url
 
     def generate(self, prompt: str) -> str:
+        print(f"🚀 Ollama using model: {self.model}")
         response = requests.post(
             f"{self.base_url}/api/generate",
             json={
@@ -69,20 +75,22 @@ class LLMRouter:
         self.primary = primary
         self.fallback = fallback
 
-    def generate(self, prompt: str) -> str:
-
-        # Try primary (OpenRouter)
+    def generate(self, prompt: str):
+        # Try primary
         if self.primary:
-            try:
-                return self.primary.generate(prompt)
-            except Exception as e:
-                logging.warning(f"Primary LLM failed: {e}")
-                print("🔁 Switching to fallback...")
+            for attempt in range(2):
+                try:
+                    logging.info(f"Using OpenRouter model: {self.primary.model}")
+                    return self.primary.generate(prompt), self.primary.model
+                except Exception as e:
+                    logging.warning(f"Primary failed (attempt {attempt+1}): {e}")
 
-        # Try fallback (Ollama)
+        # Fallback
         if self.fallback:
+            logging.info("Switching to fallback model")
+            logging.info(f"Using Ollama model: {self.fallback.model}")
             try:
-                return self.fallback.generate(prompt)
+                return self.fallback.generate(prompt), self.fallback.model
             except Exception as e:
                 raise RuntimeError(f"Both providers failed: {e}")
 

@@ -1,10 +1,7 @@
 class Generator:
+    def __init__(self, llm_router):
+        self.llm_router = llm_router
 
-    def __init__(self, llm):
-        self.llm = llm
-
-    def generate(self, prompt):
-
-        response = self.llm.generate(prompt)
-
-        return response
+    def generate(self, prompt: str):
+        answer, model = self.llm_router.generate(prompt)
+        return answer, model

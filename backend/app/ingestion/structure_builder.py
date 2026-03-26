@@ -1,10 +1,10 @@
 import re
 import uuid
+
 from backend.app.models import DocumentNode
-from docling_core.types.doc import DocItemLabel
 
 
-def infer_level_from_heading(text: str):
+def infer_level_from_heading(text: str) -> int:
     if text.startswith("#"):
         return text.count("#")
     match = re.match(r"^(\d+(?:\.\d+)*)", text)
@@ -15,16 +15,13 @@ def infer_level_from_heading(text: str):
 
 
 class StructureBuilder:
-
     def build_tree(self, document):
-
         stack = []
         roots = []
 
         for element, _ in document.iterate_items():
             label = element.label.name.upper()
             if label in ["SECTION_HEADER", "TITLE"]:
-
                 heading_text = element.text.strip()
                 level = infer_level_from_heading(heading_text)
 
@@ -48,17 +45,15 @@ class StructureBuilder:
 
                 stack.append(node)
 
-            elif label in ["TEXT", "LIST_ITEM"]:
-
-                if stack:
-                    parent_node = stack[-1]
-                    parent_node.chunks.append(
-                        {
-                            "chunk_id": str(uuid.uuid4()),
-                            "node_id": parent_node.node_id,
-                            "text": element.text.strip(),
-                            "token_count": len(element.text.split()),
-                        }
-                    )
+            elif label in ["TEXT", "LIST_ITEM"] and stack:
+                parent_node = stack[-1]
+                parent_node.chunks.append(
+                    {
+                        "chunk_id": str(uuid.uuid4()),
+                        "node_id": parent_node.node_id,
+                        "text": element.text.strip(),
+                        "token_count": len(element.text.split()),
+                    }
+                )
 
         return roots
