@@ -1,4 +1,4 @@
-﻿from backend.app.indexing import KeywordIndex
+from backend.app.indexing import KeywordIndex
 from backend.app.models import Chunk
 from backend.app.retrieval import HybridRetriever
 

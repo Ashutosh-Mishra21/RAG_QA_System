@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 from backend.app.models import Chunk
 from backend.app.services import IngestionService

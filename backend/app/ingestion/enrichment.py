@@ -1,4 +1,4 @@
-﻿from keybert import KeyBERT
+from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer
 from typing import List
 from backend.app.models import Chunk, ChunkMetadata

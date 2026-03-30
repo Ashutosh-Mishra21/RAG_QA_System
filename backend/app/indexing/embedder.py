@@ -1,4 +1,4 @@
-﻿from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer
 from typing import List, Dict
 import torch
 import hashlib

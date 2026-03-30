@@ -1,4 +1,4 @@
-﻿from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from rank_bm25 import BM25Okapi
 from backend.app.models import Chunk
 

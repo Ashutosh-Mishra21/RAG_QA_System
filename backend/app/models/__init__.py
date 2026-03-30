@@ -1,4 +1,4 @@
-﻿from .chunk import Chunk, ChunkMetadata, flatten_metadata
+from .chunk import Chunk, ChunkMetadata, flatten_metadata
 from .document_structure import StructureChunk, DocumentNode, DocumentTree
 
 from .document import (

@@ -1,4 +1,4 @@
-﻿from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple
 from backend.app.models import Chunk
 
 

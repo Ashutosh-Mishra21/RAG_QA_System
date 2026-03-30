@@ -1,1 +1,1 @@
-﻿APP_NAME = "RAG QA System"
+APP_NAME = "RAG QA System"

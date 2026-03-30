@@ -1,2 +1,2 @@
-﻿def test_generation_placeholder():
+def test_generation_placeholder():
     assert True

@@ -1,12 +1,10 @@
-from dotenv import load_dotenv, find_dotenv
 import os
 import requests
 import logging
-from pathlib import Path
+from typing import Optional, Tuple
 
 logging.basicConfig(level=logging.INFO)
-
-load_dotenv(find_dotenv())
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterLLM:
@@ -43,7 +41,7 @@ class OpenRouterLLM:
             return response.choices[0].message.content.strip()
 
         except Exception as e:
-            print("\n🔥 OPENROUTER ERROR:", repr(e), "\n")
+            logger.warning("OpenRouter request failed: %r", e)
             raise
 
 
@@ -53,7 +51,7 @@ class OllamaLLM:
         self.base_url = base_url
 
     def generate(self, prompt: str) -> str:
-        print(f"🚀 Ollama using model: {self.model}")
+        logger.info("Using Ollama model: %s", self.model)
         response = requests.post(
             f"{self.base_url}/api/generate",
             json={
@@ -65,33 +63,43 @@ class OllamaLLM:
         )
 
         if response.status_code != 200:
-            raise Exception("Ollama request failed")
+            raise Exception(f"Ollama request failed: {response.text}")
 
         return response.json()["response"].strip()
 
 
 class LLMRouter:
-    def __init__(self, primary=None, fallback=None):
+    def __init__(
+        self,
+        primary: Optional[OpenRouterLLM] = None,
+        fallback: Optional[OllamaLLM] = None,
+    ):
         self.primary = primary
         self.fallback = fallback
 
-    def generate(self, prompt: str):
-        # Try primary
+    def generate(self, prompt: str) -> Tuple[str, str]:
         if self.primary:
-            for attempt in range(2):
-                try:
-                    logging.info(f"Using OpenRouter model: {self.primary.model}")
-                    return self.primary.generate(prompt), self.primary.model
-                except Exception as e:
-                    logging.warning(f"Primary failed (attempt {attempt+1}): {e}")
-
-        # Fallback
-        if self.fallback:
-            logging.info("Switching to fallback model")
-            logging.info(f"Using Ollama model: {self.fallback.model}")
             try:
-                return self.fallback.generate(prompt), self.fallback.model
-            except Exception as e:
-                raise RuntimeError(f"Both providers failed: {e}")
+                logger.info(
+                    "Trying primary provider: OpenRouter (%s)", self.primary.model
+                )
+                return self.primary.generate(prompt), self.primary.model, "api"
+            except Exception as primary_error:
+                logger.warning(
+                    "Primary provider failed, trying fallback: %s", primary_error
+                )
+
+        if self.fallback:
+            try:
+                logger.info(
+                    "Trying fallback provider: Ollama (%s)", self.fallback.model
+                )
+                resp = self.fallback.generate(prompt)
+                print("\n[OLLAMA OUTPUT]\n", resp)
+                return resp, self.fallback.model, "local"
+            except Exception as fallback_error:
+                raise RuntimeError(
+                    f"Both providers failed. Fallback error: {fallback_error}"
+                ) from fallback_error
 
         raise RuntimeError("No LLM providers available")

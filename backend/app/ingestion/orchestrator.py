@@ -1,4 +1,4 @@
-﻿import json
+import json
 from pathlib import Path
 from .docling_parser import DoclingParser
 from .structure_builder import StructureBuilder

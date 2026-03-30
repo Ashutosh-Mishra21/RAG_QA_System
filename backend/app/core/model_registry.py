@@ -1,12 +1,12 @@
 import os
+import logging
 from threading import Lock
 from typing import Optional
-from dotenv import load_dotenv, find_dotenv
 
 from backend.app.indexing import Embedder, KeywordIndex
 from backend.app.retrieval import CrossEncoderReranker
 
-load_dotenv(find_dotenv())
+logger = logging.getLogger(__name__)
 
 
 class ModelRegistry:
@@ -50,9 +50,6 @@ class ModelRegistry:
         return self._keyword_index
 
     def get_llm_router(self):
-        print("OPENROUTER_API_KEY:", os.getenv("OPENROUTER_API_KEY"))
-        print("OLLAMA_MODEL:", os.getenv("OLLAMA_MODEL"))
-        print("OLLAMA_BASE_URL:", os.getenv("OLLAMA_BASE_URL"))
         if self._llm_router is not None:
             return self._llm_router
 
@@ -60,15 +57,27 @@ class ModelRegistry:
 
         primary = None
         fallback = None
+        print("\n")
+        print("OPENROUTER_API_KEY:", bool(os.getenv("OPENROUTER_API_KEY")))
+        print("OLLAMA_MODEL:", os.getenv("OLLAMA_MODEL"))
+        print("OLLAMA_BASE_URL:", os.getenv("OLLAMA_BASE_URL"))
 
         if os.getenv("OPENROUTER_API_KEY"):
-            model_name = os.getenv("OPENROUTER_MODEL", "z-ai/glm-4.5-air:free")
+            model_name = os.getenv("OPENROUTER_MODEL", "google/gemma-3n-e4b-it:free")
+            logger.info("Configured primary LLM provider: OpenRouter (%s)", model_name)
             primary = OpenRouterLLM(model=model_name)
 
         if os.getenv("OLLAMA_MODEL") or os.getenv("OLLAMA_BASE_URL"):
+            ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
+            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            logger.info(
+                "Configured fallback LLM provider: Ollama (%s @ %s)",
+                ollama_model,
+                ollama_base_url,
+            )
             fallback = OllamaLLM(
-                model=os.getenv("OLLAMA_MODEL", "llama3"),
-                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+                model=ollama_model,
+                base_url=ollama_base_url,
             )
 
         if primary is None and fallback is None:

@@ -1,4 +1,4 @@
-﻿// Wait until DOM is fully loaded
+// Wait until DOM is fully loaded
 let currentDocumentId = null;
 
 

@@ -1,4 +1,4 @@
-﻿from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 from backend.app.main import app
 import backend.app.api.routes.upload as upload_route
 import backend.app.api.routes.chat as chat_route
