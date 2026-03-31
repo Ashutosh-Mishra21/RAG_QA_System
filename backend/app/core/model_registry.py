@@ -5,6 +5,7 @@ from typing import Optional
 
 from backend.app.indexing import Embedder, KeywordIndex
 from backend.app.retrieval import CrossEncoderReranker
+from backend.app.models import LLMRouter, OllamaLLM, OpenRouterLLM
 
 logger = logging.getLogger(__name__)
 
@@ -53,25 +54,41 @@ class ModelRegistry:
         if self._llm_router is not None:
             return self._llm_router
 
-        from backend.app.models import LLMRouter, OllamaLLM, OpenRouterLLM
-
         primary = None
         fallback = None
-        print("\n")
-        print("OPENROUTER_API_KEY:", bool(os.getenv("OPENROUTER_API_KEY")))
-        print("OLLAMA_MODEL:", os.getenv("OLLAMA_MODEL"))
-        print("OLLAMA_BASE_URL:", os.getenv("OLLAMA_BASE_URL"))
+        logger.info(
+            "[MODEL_REGISTRY] OPENROUTER_API_KEY present: %s",
+            bool(os.getenv("OPENROUTER_API_KEY")),
+        )
+        logger.info("[MODEL_REGISTRY] OLLAMA_MODEL: %s", os.getenv("OLLAMA_MODEL"))
+        logger.info(
+            "[MODEL_REGISTRY] OLLAMA_BASE_URL: %s", os.getenv("OLLAMA_BASE_URL")
+        )
 
         if os.getenv("OPENROUTER_API_KEY"):
-            model_name = os.getenv("OPENROUTER_MODEL", "google/gemma-3n-e4b-it:free")
-            logger.info("Configured primary LLM provider: OpenRouter (%s)", model_name)
-            primary = OpenRouterLLM(model=model_name)
+            model_name = os.getenv(
+                "OPENROUTER_MODEL", "meta-llama/llama-3.2-3b-instruct:free"
+            )
+            logger.info(
+                "[MODEL_REGISTRY] Initializing primary LLM provider: OpenRouter (%s)",
+                model_name,
+            )
+            try:
+                primary = OpenRouterLLM(model=model_name)
+                logger.info(
+                    "[MODEL_REGISTRY] Primary LLM provider initialized successfully"
+                )
+            except Exception as exc:
+                logger.exception(
+                    "[MODEL_REGISTRY] Failed to initialize OpenRouterLLM: %s", exc
+                )
+                primary = None
 
         if os.getenv("OLLAMA_MODEL") or os.getenv("OLLAMA_BASE_URL"):
             ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
             ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             logger.info(
-                "Configured fallback LLM provider: Ollama (%s @ %s)",
+                "[MODEL_REGISTRY] Configured fallback LLM provider: Ollama (%s @ %s)",
                 ollama_model,
                 ollama_base_url,
             )
@@ -80,10 +97,20 @@ class ModelRegistry:
                 base_url=ollama_base_url,
             )
 
+            logger.info(
+                "[MODEL_REGISTRY] Fallback LLM provider initialized successfully"
+            )
+
         if primary is None and fallback is None:
             raise RuntimeError(
                 "No real LLM provider configured. Set OPENROUTER_API_KEY or OLLAMA_* env vars."
             )
+
+        logger.info(
+            "[MODEL_REGISTRY] LLMRouter initialization complete (primary=%s, fallback=%s)",
+            primary is not None,
+            fallback is not None,
+        )
 
         self._llm_router = LLMRouter(primary=primary, fallback=fallback)
         return self._llm_router

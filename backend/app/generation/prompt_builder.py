@@ -1,7 +1,3 @@
-from mpire import context
-from sympy.polys.polyconfig import query
-
-
 class PromptBuilder:
     def build_prompt(self, query: str, context: str, provider: str) -> str:
         """

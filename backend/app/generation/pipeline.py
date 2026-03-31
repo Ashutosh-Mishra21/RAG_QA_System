@@ -1,4 +1,7 @@
+import logging
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 class GenerationPipeline:
@@ -22,17 +25,32 @@ class GenerationPipeline:
         context, citation_map = self.context_builder.build(top_chunks)
 
         llm = self.generator.llm_router
+        logger.info("[PIPELINE] llm.primary is None: %s", llm.primary is None)
 
-        provider_type = "api" if llm.primary else "local"
+        expected_provider = "api" if llm.primary else "local"
         # first try with API-style (default)
-        initial_prompt = self.prompt_builder.build_prompt(query, context, provider_type)
+        initial_prompt = self.prompt_builder.build_prompt(
+            query, context, expected_provider
+        )
 
         answer, used_model, provider = self.generator.generate(initial_prompt)
+        logger.info("[PIPELINE] Provider used for initial generation: %s", provider)
 
-        # 🔥 if fallback happened → regenerate with local prompt
-        if provider == provider_type:
+        fallback_triggered = expected_provider == "api" and provider == "local"
+        logger.info(
+            "[PIPELINE] Fallback triggered: %s (expected=%s, actual=%s)",
+            fallback_triggered,
+            expected_provider,
+            provider,
+        )
+
+        # If provider differs from the prompt style assumption, rebuild prompt once for actual provider
+        if provider != expected_provider:
             prompt = self.prompt_builder.build_prompt(query, context, provider)
             answer, used_model, provider = self.generator.generate(prompt)
+            logger.info(
+                "[PIPELINE] Provider used after prompt adaptation: %s", provider
+            )
 
         validation = self.validator.validate(answer, citation_map, top_chunks)
         if validation["confidence"] < 0.2 and len(answer.split()) < 5:
@@ -42,6 +60,8 @@ class GenerationPipeline:
                 "confidence": validation["confidence"],
                 "sources": [c.metadata for c in top_chunks],
                 "reason": validation["reason"],
+                "provider": provider,
+                "fallback_triggered": fallback_triggered,
             }
 
         return {
@@ -50,4 +70,6 @@ class GenerationPipeline:
             "confidence": validation["confidence"],
             "sources": [c.metadata for c in top_chunks],
             "model": used_model,
+            "provider": provider,
+            "fallback_triggered": fallback_triggered,
         }

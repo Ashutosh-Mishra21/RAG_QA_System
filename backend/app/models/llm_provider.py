@@ -29,19 +29,28 @@ class OpenRouterLLM:
                 "X-Title": "My App",
             },
         )
+        logger.info(
+            "[OPENROUTER] Client initialized (model=%s, api_key_present=%s)",
+            self.model,
+            bool(api_key),
+        )
 
     def generate(self, prompt: str) -> str:
         try:
+            logger.info(
+                "[OPENROUTER] Sending completion request (model=%s)", self.model
+            )
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
                 timeout=60,
             )
+            logger.info("[OPENROUTER] Completion request succeeded")
             return response.choices[0].message.content.strip()
 
         except Exception as e:
-            logger.warning("OpenRouter request failed: %r", e)
+            logger.exception("[OPENROUTER] Request failed: %r", e)
             raise
 
 
@@ -81,23 +90,36 @@ class LLMRouter:
         if self.primary:
             try:
                 logger.info(
-                    "Trying primary provider: OpenRouter (%s)", self.primary.model
+                    "[ROUTER] Trying primary provider: OpenRouter (%s)",
+                    self.primary.model,
                 )
-                return self.primary.generate(prompt), self.primary.model, "api"
+                primary_resp = self.primary.generate(prompt)
+                logger.info(
+                    "[ROUTER] Primary provider success: OpenRouter (%s)",
+                    self.primary.model,
+                )
+                return primary_resp, self.primary.model, "api"
             except Exception as primary_error:
-                logger.warning(
-                    "Primary provider failed, trying fallback: %s", primary_error
-                )
+                logger.exception("[ROUTER] Primary provider failed: %s", primary_error)
+                logger.info("[ROUTER] Switching to fallback provider")
 
         if self.fallback:
             try:
                 logger.info(
-                    "Trying fallback provider: Ollama (%s)", self.fallback.model
+                    "[ROUTER] Trying fallback provider: Ollama (%s)",
+                    self.fallback.model,
                 )
                 resp = self.fallback.generate(prompt)
+                logger.info(
+                    "[ROUTER] Fallback provider success: Ollama (%s)",
+                    self.fallback.model,
+                )
                 print("\n[OLLAMA OUTPUT]\n", resp)
                 return resp, self.fallback.model, "local"
             except Exception as fallback_error:
+                logger.exception(
+                    "[ROUTER] Fallback provider failed: %s", fallback_error
+                )
                 raise RuntimeError(
                     f"Both providers failed. Fallback error: {fallback_error}"
                 ) from fallback_error
