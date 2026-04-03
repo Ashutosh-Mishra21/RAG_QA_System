@@ -7,6 +7,10 @@ from backend.app.indexing import Embedder, KeywordIndex
 from backend.app.retrieval import CrossEncoderReranker
 from backend.app.models import LLMRouter, OllamaLLM, OpenRouterLLM
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -66,8 +70,10 @@ class ModelRegistry:
         )
 
         if os.getenv("OPENROUTER_API_KEY"):
-            model_name = os.getenv(
-                "OPENROUTER_MODEL", "meta-llama/llama-3.2-3b-instruct:free"
+            model_name = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.6-plus-preview:free")
+            print(
+                "\n",
+                f"[MODEL_REGISTRY] OPENROUTER_API_KEY found. Initializing OpenRouter primary: {model_name}",
             )
             logger.info(
                 "[MODEL_REGISTRY] Initializing primary LLM provider: OpenRouter (%s)",
@@ -75,10 +81,14 @@ class ModelRegistry:
             )
             try:
                 primary = OpenRouterLLM(model=model_name)
+                print("[MODEL_REGISTRY] Primary provider ready: OpenRouter")
                 logger.info(
                     "[MODEL_REGISTRY] Primary LLM provider initialized successfully"
                 )
             except Exception as exc:
+                print(
+                    f"[MODEL_REGISTRY] Primary provider init failed. API will be skipped: {exc}"
+                )
                 logger.exception(
                     "[MODEL_REGISTRY] Failed to initialize OpenRouterLLM: %s", exc
                 )

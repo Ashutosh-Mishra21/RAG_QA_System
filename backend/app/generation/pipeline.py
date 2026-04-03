@@ -37,6 +37,9 @@ class GenerationPipeline:
         logger.info("[PIPELINE] Provider used for initial generation: %s", provider)
 
         fallback_triggered = expected_provider == "api" and provider == "local"
+        print(
+            f"[PIPELINE] Provider result: expected={expected_provider}, actual={provider}, fallback_triggered={fallback_triggered}"
+        )
         logger.info(
             "[PIPELINE] Fallback triggered: %s (expected=%s, actual=%s)",
             fallback_triggered,
@@ -44,12 +47,18 @@ class GenerationPipeline:
             provider,
         )
 
-        # If provider differs from the prompt style assumption, rebuild prompt once for actual provider
-        if provider != expected_provider:
+        # If provider differs from the prompt style assumption, only rebuild once when
+        # this was not an API->local fallback. Re-running through the router after a
+        # fallback would attempt the API a second time for the same user query.
+        if provider != expected_provider and not fallback_triggered:
             prompt = self.prompt_builder.build_prompt(query, context, provider)
             answer, used_model, provider = self.generator.generate(prompt)
             logger.info(
                 "[PIPELINE] Provider used after prompt adaptation: %s", provider
+            )
+        elif fallback_triggered:
+            logger.info(
+                "[PIPELINE] Skipping prompt adaptation rerun after API fallback to avoid duplicate provider attempts"
             )
 
         validation = self.validator.validate(answer, citation_map, top_chunks)
