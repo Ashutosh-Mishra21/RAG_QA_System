@@ -75,6 +75,7 @@ class GenerationPipeline:
 
         return {
             "answer": answer,
+            "context": context,
             "citations": validation["citations"],
             "confidence": validation["confidence"],
             "sources": [c.metadata for c in top_chunks],

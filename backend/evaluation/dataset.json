@@ -1,0 +1,14 @@
+[
+  {
+    "query": "What is cosine similarity?",
+    "ground_truth": "Cosine similarity measures similarity between vectors using the cosine of the angle between them."
+  },
+  {
+    "query": "How do embeddings work?",
+    "ground_truth": "Embeddings convert data into dense vector representations in a continuous space."
+  },
+  {
+    "query": "What is metadata filtering?",
+    "ground_truth": "Metadata filtering restricts search results based on structured attributes like tags or fields."
+  }
+]
