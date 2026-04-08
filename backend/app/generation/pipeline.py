@@ -19,8 +19,12 @@ class GenerationPipeline:
         retrieved = self.retriever.retrieve(
             query=query, top_k=40, metadata_filters=metadata_filters or {}
         )
-        reranked = self.reranker.rerank(query, retrieved)
-        top_chunks = reranked[:5]
+        print("Retrieved:", len(retrieved))
+
+        reranked = self.reranker.rerank(query, retrieved)  # ✅ first define
+
+        top_chunks = reranked[:5]  # ✅ then use it
+        print("Top chunks:", len(top_chunks))
 
         context, citation_map = self.context_builder.build(top_chunks)
 
@@ -65,6 +69,7 @@ class GenerationPipeline:
         if validation["confidence"] < 0.2 and len(answer.split()) < 5:
             return {
                 "answer": "I don't know",
+                "context": context,  # 🔥 ADD THIS
                 "citations": [],
                 "confidence": validation["confidence"],
                 "sources": [c.metadata for c in top_chunks],

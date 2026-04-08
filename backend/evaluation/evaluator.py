@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from backend.evaluation.metrics import recall_at_k, mrr_at_k, ndcg_at_k
 
 
@@ -9,7 +10,10 @@ class RetrievalEvaluator:
         self.test_queries = self._load_test_queries()
 
     def _load_test_queries(self):
-        with open(self.test_file, "r", encoding="utf-8") as f:
+        file_path = Path(self.test_file)
+        if not file_path.is_absolute() and not file_path.exists():
+            file_path = Path(__file__).resolve().parents[2] / self.test_file
+        with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def evaluate_retriever(self, retriever, reranker=None):

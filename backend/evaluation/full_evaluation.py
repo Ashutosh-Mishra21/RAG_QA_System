@@ -2,11 +2,15 @@ from backend.app.services.rag_service import RagService
 from backend.evaluation.generation_evaluator import GenerationEvaluator
 from backend.evaluation.evaluator import RetrievalEvaluator
 from backend.app.core.model_registry import ModelRegistry
+from pathlib import Path
 
 
 def run_full_evaluation():
 
-    rag = RagService(storage_dir="data")
+    rag = RagService(storage_dir=Path("data"))
+    for file in Path("data/raw").glob("*"):
+        print("Ingesting:", file)
+        rag.ingest(str(file))
 
     llm = ModelRegistry.instance().get_llm_router()
 
@@ -25,3 +29,7 @@ def run_full_evaluation():
 
     print("\n===== Generation Metrics =====")
     print(generation_scores)
+
+
+if __name__ == "__main__":
+    run_full_evaluation()

@@ -2,10 +2,13 @@ import os
 import logging
 from threading import Lock
 from typing import Optional
+from dotenv import load_dotenv
+from pathlib import Path
 
 from backend.app.indexing import Embedder, KeywordIndex
 from backend.app.retrieval import CrossEncoderReranker
-from backend.app.models import LLMRouter, OllamaLLM, OpenRouterLLM
+
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,6 +58,9 @@ class ModelRegistry:
         return self._keyword_index
 
     def get_llm_router(self):
+
+        from backend.app.models import LLMRouter, OllamaLLM, OpenRouterLLM
+
         if self._llm_router is not None:
             return self._llm_router
 

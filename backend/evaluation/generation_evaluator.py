@@ -1,5 +1,6 @@
 import json
-from backend.evaluation import faithfulness_score, relevance_score
+from pathlib import Path
+from backend.evaluation.generation_metrics import faithfulness_score, relevance_score
 
 
 class GenerationEvaluator:
@@ -8,7 +9,10 @@ class GenerationEvaluator:
         self.test_queries = self._load()
 
     def _load(self):
-        with open(self.test_file, "r", encoding="utf-8") as f:
+        file_path = Path(self.test_file)
+        if not file_path.is_absolute() and not file_path.exists():
+            file_path = Path(__file__).resolve().parents[2] / self.test_file
+        with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def evaluate(self, pipeline, llm, data_dir):
@@ -18,7 +22,7 @@ class GenerationEvaluator:
         for item in self.test_queries:
             query = item["query"]
 
-            output = pipeline(query, data_dir)
+            output = pipeline(query) if data_dir is None else pipeline(query, data_dir)
 
             answer = output["answer"]
             context = output["context"]

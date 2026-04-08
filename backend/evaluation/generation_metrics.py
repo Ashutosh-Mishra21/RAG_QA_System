@@ -1,3 +1,9 @@
+def _normalize_llm_result(result):
+    if isinstance(result, tuple):
+        return str(result[0])
+    return str(result)
+
+
 def faithfulness_score(answer, context, llm):
 
     prompt = f"""
@@ -15,7 +21,7 @@ Reply ONLY with:
 YES or NO
 """
 
-    result = llm.generate(prompt)
+    result = _normalize_llm_result(llm.generate(prompt))
 
     return 1 if "YES" in result.upper() else 0
 
@@ -34,6 +40,6 @@ ANSWER:
 Reply ONLY with YES or NO.
 """
 
-    result = llm.generate(prompt)
+    result = _normalize_llm_result(llm.generate(prompt))
 
     return 1 if "YES" in result.upper() else 0

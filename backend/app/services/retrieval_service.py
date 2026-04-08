@@ -1,14 +1,37 @@
-from backend.app.retrieval import SemanticRetriever
+from typing import Any, Dict, Optional
+
+from backend.app.core import ModelRegistry
+from backend.app.retrieval import HybridRetriever, SemanticRetriever
+
+
+class RetrievalService:
+    def __init__(self) -> None:
+        registry = ModelRegistry.instance()
+        self.retriever = HybridRetriever(
+            dense_retriever=SemanticRetriever(embedder=registry.get_embedder()),
+            keyword_index=registry.get_keyword_index(),
+        )
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 5,
+        metadata_filters: Optional[Dict[str, Any]] = None,
+    ):
+        return self.retriever.retrieve(
+            query=query,
+            top_k=top_k,
+            metadata_filters=metadata_filters or {},
+        )
 
 
 def main():
-    retriever = SemanticRetriever(top_k=5)
+    service = RetrievalService()
 
     query = "Explain the embedding pipeline design"
-
     print(f"\n🔎 Query: {query}\n")
 
-    results = retriever.retrieve(query=query)
+    results = service.retrieve(query=query, top_k=5)
 
     if not results:
         print("❌ No results found.")

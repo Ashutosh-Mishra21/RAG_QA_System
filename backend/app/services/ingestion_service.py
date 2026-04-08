@@ -21,7 +21,7 @@ class IngestionService:
 
     def save_file(self, filename: str, file_bytes: bytes):
         document_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now().isoformat()
         extension = Path(filename).suffix
         new_filename = f"{document_id}{extension}"
         file_path = self.raw_dir / new_filename
@@ -91,9 +91,10 @@ class IngestionService:
         if embeddings:
             try:
                 vector_store.upsert_chunks(enriched, embeddings)
-            except Exception:
+            except Exception as e:
                 # Retrieval can still work via keyword index when vector db is unavailable.
-                pass
+                print("❌ Qdrant upsert failed:", e)
+                raise
 
         registry.get_keyword_index().add(enriched)
 
