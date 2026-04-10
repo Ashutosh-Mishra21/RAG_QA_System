@@ -76,7 +76,9 @@ class ModelRegistry:
         )
 
         if os.getenv("OPENROUTER_API_KEY"):
-            model_name = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.6-plus-preview:free")
+            model_name = os.getenv(
+                "OPENROUTER_MODEL", "liquid/lfm-2.5-1.2b-thinking:free"
+            )
             print(
                 "\n",
                 f"[MODEL_REGISTRY] OPENROUTER_API_KEY found. Initializing OpenRouter primary: {model_name}",
