@@ -1,22 +1,34 @@
 [
   {
-    "query": "How do embedding models measure semantic similarity?",
-    "relevant_ids": ["embedding_doc"]
-  },
-  {
-    "query": "Why does hierarchical chunking improve document retrieval?",
-    "relevant_ids": ["chunking_doc"]
-  },
-  {
-    "query": "How can metadata be used to filter search results?",
+    "query": "How can search systems restrict results using document attributes?",
     "relevant_ids": ["metadata_doc"]
   },
   {
-    "query": "Explain vector similarity in embedding models",
+    "query": "What are common ways to calculate similarity between embeddings?",
     "relevant_ids": ["embedding_doc"]
   },
   {
-    "query": "What techniques improve RAG document chunking?",
+    "query": "How do filtering techniques help reduce irrelevant results in vector search?",
+    "relevant_ids": ["metadata_doc"]
+  },
+  {
+    "query": "What problems occur if documents are not chunked properly in RAG?",
     "relevant_ids": ["chunking_doc"]
+  },
+  {
+    "query": "Explain how semantic search differs from keyword-based search",
+    "relevant_ids": ["embedding_doc", "metadata_doc"]
+  },
+  {
+    "query": "How can combining metadata and embeddings improve retrieval accuracy?",
+    "relevant_ids": ["embedding_doc", "metadata_doc"]
+  },
+  {
+    "query": "How do systems decide which parts of documents to retrieve?",
+    "relevant_ids": ["chunking_doc", "metadata_doc"]
+  },
+  {
+    "query": "Why do some retrieved results seem unrelated even when embeddings are used?",
+    "relevant_ids": ["embedding_doc", "metadata_doc"]
   }
 ]

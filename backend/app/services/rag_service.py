@@ -11,7 +11,7 @@ from backend.app.generation import (
     PromptBuilder,
 )
 
-from backend.app.retrieval import HybridRetriever, SemanticRetriever
+from backend.app.retrieval import HybridRetriever, SemanticRetriever, QueryRewriter
 
 
 class RagService:
@@ -22,6 +22,7 @@ class RagService:
         self.ingestion_service = IngestionService(storage_dir) if storage_dir else None
 
         # 🔹 Retrieval
+        self.query_rewriter = QueryRewriter(registry.get_llm_router())
         self.retriever = HybridRetriever(
             dense_retriever=SemanticRetriever(embedder=registry.get_embedder()),
             keyword_index=registry.get_keyword_index(),
@@ -48,10 +49,20 @@ class RagService:
     # =========================
     # 🔹 QUERY → ANSWER (Phase 2)
     # =========================
-    def answer(
-        self, query: str, metadata_filters: Optional[Dict[str, Any]] = None
-    ) -> dict:
-        return self.pipeline.run(query=query, metadata_filters=metadata_filters or {})
+    def answer(self, query: str, metadata_filters=None) -> dict:
+
+        # 🔥 STEP 1: Rewrite query
+        rewritten_query = self.query_rewriter.rewrite(query)
+
+        print(f"\n[QUERY REWRITE]")
+        print(f"Original: {query}")
+        print(f"Rewritten: {rewritten_query}\n")
+
+        # 🔥 STEP 2: Use rewritten query
+        return self.pipeline.run(
+            query=rewritten_query,
+            metadata_filters=metadata_filters or {},
+        )
 
     # =========================
     # 🔥 EVALUATION ENTRYPOINT (Phase 3)

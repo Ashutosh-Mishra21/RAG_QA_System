@@ -3,6 +3,8 @@ import requests
 import logging
 from typing import Optional, Tuple
 
+from backend.app.core.llm_cache import LLMCache
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -12,7 +14,6 @@ class OpenRouterLLM:
         self.model = model
 
         api_key = os.getenv("OPENROUTER_API_KEY")
-
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY not found in environment")
 
@@ -29,6 +30,7 @@ class OpenRouterLLM:
                 "X-Title": "My App",
             },
         )
+
         logger.info(
             "[OPENROUTER] Client initialized (model=%s, api_key_present=%s)",
             self.model,
@@ -40,14 +42,20 @@ class OpenRouterLLM:
             logger.info(
                 "[OPENROUTER] Sending completion request (model=%s)", self.model
             )
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
                 timeout=60,
             )
+
+            content = response.choices[0].message.content
+            if not content:
+                raise ValueError("Empty response from OpenRouter")
+
             logger.info("[OPENROUTER] Completion request succeeded")
-            return response.choices[0].message.content.strip()
+            return content.strip()
 
         except Exception as e:
             logger.exception("[OPENROUTER] Request failed: %r", e)
@@ -61,6 +69,7 @@ class OllamaLLM:
 
     def generate(self, prompt: str) -> str:
         logger.info("Using Ollama model: %s", self.model)
+
         response = requests.post(
             f"{self.base_url}/api/generate",
             json={
@@ -74,7 +83,11 @@ class OllamaLLM:
         if response.status_code != 200:
             raise Exception(f"Ollama request failed: {response.text}")
 
-        return response.json()["response"].strip()
+        data = response.json()
+        if "response" not in data:
+            raise ValueError("Invalid response from Ollama")
+
+        return data["response"].strip()
 
 
 class LLMRouter:
@@ -85,37 +98,75 @@ class LLMRouter:
     ):
         self.primary = primary
         self.fallback = fallback
+        self.cache = LLMCache()
 
-    def generate(self, prompt: str) -> Tuple[str, str]:
+    def generate(self, prompt: str) -> Tuple[str, str, str]:
+        cache_key_model = self.primary.model if self.primary else "fallback"
+
+        cached = self.cache.get(prompt, model=cache_key_model)
+        if cached:
+            logger.info(
+                "[ROUTER] Cache hit for prompt (provider=%s)",
+                cached.get("provider", "unknown"),
+            )
+            return (
+                cached["response"],
+                cached.get("model", "cached"),
+                cached.get("provider", "unknown"),
+            )
+
+        # Try primary
         if self.primary:
             try:
                 logger.info(
                     "[ROUTER] Trying primary provider: OpenRouter (%s)",
                     self.primary.model,
                 )
+
                 primary_resp = self.primary.generate(prompt)
+
                 logger.info(
                     "[ROUTER] Primary provider success: OpenRouter (%s)",
                     self.primary.model,
                 )
+
+                self.cache.set(
+                    prompt,
+                    primary_resp,
+                    provider="api",
+                    model=self.primary.model,
+                )
+
                 return primary_resp, self.primary.model, "api"
+
             except Exception as primary_error:
                 logger.exception("[ROUTER] Primary provider failed: %s", primary_error)
                 logger.info("[ROUTER] Switching to fallback provider")
 
+        # Try fallback
         if self.fallback:
             try:
                 logger.info(
                     "[ROUTER] Trying fallback provider: Ollama (%s)",
                     self.fallback.model,
                 )
+
                 resp = self.fallback.generate(prompt)
+
                 logger.info(
                     "[ROUTER] Fallback provider success: Ollama (%s)",
                     self.fallback.model,
                 )
-                print("\n[OLLAMA OUTPUT]\n", resp)
+
+                self.cache.set(
+                    prompt,
+                    resp,
+                    provider="local",
+                    model=self.fallback.model,
+                )
+
                 return resp, self.fallback.model, "local"
+
             except Exception as fallback_error:
                 logger.exception(
                     "[ROUTER] Fallback provider failed: %s", fallback_error

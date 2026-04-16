@@ -77,7 +77,7 @@ class ModelRegistry:
 
         if os.getenv("OPENROUTER_API_KEY"):
             model_name = os.getenv(
-                "OPENROUTER_MODEL", "liquid/lfm-2.5-1.2b-thinking:free"
+                "OPENROUTER_MODEL", "qwen/qwen3-next-80b-a3b-instruct:free"
             )
             print(
                 "\n",

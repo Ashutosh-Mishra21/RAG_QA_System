@@ -1,14 +1,42 @@
 [
   {
-    "query": "What is cosine similarity?",
-    "ground_truth": "Cosine similarity measures similarity between vectors using the cosine of the angle between them."
+    "query": "How do embedding models measure similarity between two texts?",
+    "ground_truth": "Embedding models represent text as vectors and measure similarity using metrics like cosine similarity based on the angle between vectors."
   },
   {
-    "query": "How do embeddings work?",
-    "ground_truth": "Embeddings convert data into dense vector representations in a continuous space."
+    "query": "Why is cosine similarity commonly used instead of Euclidean distance in embeddings?",
+    "ground_truth": "Cosine similarity focuses on the angle between vectors rather than magnitude, making it more suitable for comparing semantic similarity in high-dimensional spaces."
   },
   {
-    "query": "What is metadata filtering?",
-    "ground_truth": "Metadata filtering restricts search results based on structured attributes like tags or fields."
+    "query": "How does hierarchical chunking improve retrieval in RAG systems?",
+    "ground_truth": "Hierarchical chunking preserves document structure and context, improving retrieval accuracy by grouping related information instead of splitting arbitrarily."
+  },
+  {
+    "query": "What issues arise when documents are poorly chunked?",
+    "ground_truth": "Poor chunking can break context, reduce retrieval relevance, and lead to incomplete or incorrect answers in RAG systems."
+  },
+  {
+    "query": "How does metadata filtering improve search results?",
+    "ground_truth": "Metadata filtering narrows down search results using structured attributes, improving precision and reducing irrelevant matches."
+  },
+  {
+    "query": "How do embeddings and metadata work together in retrieval systems?",
+    "ground_truth": "Embeddings capture semantic similarity while metadata enables structured filtering, and combining both improves retrieval accuracy and relevance."
+  },
+  {
+    "query": "Why does combining chunking and embeddings improve RAG performance?",
+    "ground_truth": "Chunking ensures relevant context is retrievable while embeddings enable semantic matching, and together they improve both recall and answer quality."
+  },
+  {
+    "query": "How do retrieval errors lead to hallucinations in RAG systems?",
+    "ground_truth": "If retrieval returns irrelevant or incomplete context, the model may generate unsupported answers, leading to hallucinations."
+  },
+  {
+    "query": "How do systems understand meaning in text search?",
+    "ground_truth": "Systems use embeddings to represent text as vectors and compare them using similarity measures to capture semantic meaning."
+  },
+  {
+    "query": "How do search systems decide what information is relevant?",
+    "ground_truth": "Search systems combine semantic similarity, keyword matching, and metadata filtering to determine relevance."
   }
 ]

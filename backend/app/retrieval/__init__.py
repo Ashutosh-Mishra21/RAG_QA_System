@@ -5,6 +5,7 @@ from .query_analyzer import RetrievalStrategy, QueryAnalyzer
 from .reranker import CrossEncoderReranker
 from .semantic_retriever import SemanticRetriever
 from .strategy_controller import AgenticRetriever
+from .query_rewriter import QueryRewriter
 
 __all__ = [
     "BM25Retriever",
@@ -15,4 +16,5 @@ __all__ = [
     "CrossEncoderReranker",
     "SemanticRetriever",
     "AgenticRetriever",
+    "QueryRewriter",
 ]
