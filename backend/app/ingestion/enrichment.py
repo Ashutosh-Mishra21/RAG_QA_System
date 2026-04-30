@@ -6,9 +6,10 @@ import torch
 
 
 class ChunkEnricher:
+
     def __init__(
         self,
-        embedding_model: str = "BAAI/bge-base-en-v1.5",
+        embedding_model: str = r"D:\PROGRAMMING\OpenModels\HuggingFaceModels\hub\models--BAAI--bge-large-en-v1.5\snapshots\d4aa6901d3a41ba39fb536a557fa166f842b0e09",
         top_k_keywords: int = 5,
     ):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

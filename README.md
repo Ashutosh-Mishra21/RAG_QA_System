@@ -5,13 +5,24 @@
 ![Architecture](https://img.shields.io/badge/Architecture-RAG-0A66C2)
 ![Status](https://img.shields.io/badge/Status-Active_Development-orange)
 
-## Project Title
-RAG_QA_System: a FastAPI-based Retrieval-Augmented Generation (RAG) system focused on document ingestion and retrieval quality.
+---
 
-## Overview
+## 1. Project Title
+
+**RAG_QA_System**: a FastAPI-based Retrieval-Augmented Generation (RAG) system focused on document ingestion and retrieval quality.
+
+---
+
+## 2. Overview
+
 RAG_QA_System is structured around a document QA workflow where uploaded files are parsed, chunked, enriched, and prepared for semantic/keyword retrieval. The project currently includes production-style ingestion and retrieval building blocks, while answer generation is scaffolded and returns placeholder responses.
 
-## Quickstart
+---
+
+## 3. Quickstart
+
+### 3.1 Setup
+
 ```bash
 # 1) Clone and enter the repository
 git clone <your-repo-url>
@@ -19,35 +30,52 @@ cd RAG_QA_System
 
 # 2) Create and activate a virtual environment
 python -m venv .venv
+
 # Windows (PowerShell)
 .venv\Scripts\Activate.ps1
+
 # Linux/macOS
 # source .venv/bin/activate
 
 # 3) Install dependencies
 pip install -r requirements.txt
+````
 
-# 4) (Optional but recommended for retrieval) Start Qdrant
+### 3.2 Start Services
+
+```bash
+# Start Qdrant (optional but recommended)
 docker run -p 6333:6333 qdrant/qdrant
+```
 
-# 5) Run the app
+### 3.3 Run Application
+
+```bash
 uvicorn backend.app.main:app --reload
 ```
 
-Then open:
-- `http://127.0.0.1:8000/`
-- `http://127.0.0.1:8000/chat`
-- `http://127.0.0.1:8000/api/health`
+### 3.4 Access Endpoints
 
-## Features
-- FastAPI web app with HTML routes and API routes (`/api/health`, `/api/upload`, `/api/chat`, `/api/evaluation`).
-- Document ingestion pipeline with parsing, structure building, chunking, and flattening.
-- Retrieval stack with semantic search, BM25 retrieval, and hybrid fusion.
-- Chunk enrichment for metadata/keyword-aware retrieval.
-- Retrieval evaluation utilities (Recall@K, MRR@K, nDCG@K).
+* `http://127.0.0.1:8000/`
+* `http://127.0.0.1:8000/chat`
+* `http://127.0.0.1:8000/api/health`
 
-## Architecture / How it Works
-### System Architecture (Mermaid)
+---
+
+## 4. Features
+
+* FastAPI web app with HTML + API routes
+* Document ingestion pipeline
+* Hybrid retrieval (semantic + BM25)
+* Chunk enrichment for metadata-aware search
+* Retrieval evaluation metrics (Recall@K, MRR@K, nDCG@K)
+
+---
+
+## 5. Architecture
+
+### 5.1 System Architecture (Mermaid)
+
 ```mermaid
 flowchart LR
     U[User] --> FE[Frontend Templates<br/>/ and /chat]
@@ -66,7 +94,7 @@ flowchart LR
     PAR --> SB[StructureBuilder]
     SB --> NC[NodeChunker]
     NC --> FL[flatten_tree]
-    FL --> PROC[(data/processed: *_tree.json, *_flat.json)]
+    FL --> PROC[(data/processed)]
 
     PROC --> EP[EmbeddingPipeline]
     EP --> ENR[ChunkEnricher]
@@ -80,94 +108,129 @@ flowchart LR
     BR --> HR
     HR --> RR[CrossEncoderReranker]
     RR --> CH
-    CH --> RS[RagService: placeholder response]
+    CH --> RS[RagService]
 ```
 
-### Retrieval + Generation Pipeline
-1. Upload flow (`POST /api/upload`):
-   - File is stored under `data/raw` via `IngestionService`.
-   - `IngestionOrchestrator` parses and structures the document using `DoclingParser`, `StructureBuilder`, and `NodeChunker`.
-   - Tree and flat chunk artifacts are saved to `data/processed`.
-2. Retrieval flow:
-   - Chunks can be enriched and embedded through `EmbeddingPipeline`.
-   - Embeddings and payloads are stored in Qdrant (`VectorStore`).
-   - Query-time retrieval is supported by semantic (`SemanticRetriever`), lexical (`BM25Retriever`), and fusion (`HybridRetriever`) components, with optional reranking.
-3. Generation flow:
-   - `RagService` and generation utilities exist, but `POST /api/chat` currently returns `"Not implemented yet."`.
+### 5.2 Pipeline Breakdown
 
-## Tech Stack
-- Python 3.10+
-- FastAPI + Uvicorn
-- Jinja2 (template rendering)
-- Pydantic
-- Docling + `docling-core`
-- SentenceTransformers + PyTorch
-- Qdrant (`qdrant-client`)
-- `rank-bm25`
-- KeyBERT
-- NumPy
+#### 5.2.1 Upload Flow
 
-## Project Structure
-| Path | Role | Key Contents |
-|---|---|---|
-| `backend/app/main.py` | FastAPI entrypoint | App init, static mount, HTML route registration, API router inclusion |
-| `backend/app/api/routes/` | HTTP API layer | `health.py`, `upload.py`, `chat.py`, `evaluation.py` |
-| `backend/app/ingestion/` | Document processing pipeline | `docling_parser.py`, `structure_builder.py`, `node_chunker.py`, `tree_flattener.py`, `orchestrator.py`, `enrichment.py` |
-| `backend/app/indexing/` | Embeddings + vector storage | `embedder.py`, `vector_store.py`, `schema_manager.py`, `keyword_index.py` |
-| `backend/app/retrieval/` | Query-time retrieval logic | `semantic_retriever.py`, `bm25_retriever.py`, `hybrid_retriever.py`, `reranker.py`, `strategy_controller.py` |
-| `backend/app/generation/` | Generation scaffolding | `prompt_builder.py`, `context_builder.py`, `generator.py`, `citation_manager.py`, `pipeline.py` |
-| `backend/app/models/` | Shared data models | `document.py`, `chunk.py`, `query.py`, `response.py`, `document_structure.py` |
-| `backend/app/services/` | Service layer | `ingestion_service.py`, `rag_service.py`, `retrieval_service.py` |
-| `backend/evaluation/` | Retrieval evaluation | `metrics.py`, `evaluator.py`, `test_queries.json` |
-| `backend/tests/` | Test and benchmark scripts | retrieval, ingestion, generation, and evaluation tests |
-| `frontend/templates/` | UI templates | `index.html`, `chat.html`, reusable component partials |
-| `frontend/static/` | Frontend assets | CSS and JS for interactions/animations |
-| `data/raw/` | Uploaded source documents | Input files saved before processing |
-| `data/processed/` | Processed artifacts | Generated `*_tree.json` and `*_flat.json` outputs |
-| `requirements.txt` | Root Python dependencies | Unified dependency list for running the project |
+* File stored in `data/raw`
+* Parsed and structured
+* Chunked and flattened
+* Saved in `data/processed`
 
-## Installation
-### Prerequisites
-- Python 3.10+
-- Qdrant instance at `localhost:6333` for retrieval/indexing features
+#### 5.2.2 Retrieval Flow
 
-### Install dependencies
+* Embeddings generated
+* Stored in Qdrant
+* Retrieved via:
+
+  * Semantic
+  * BM25
+  * Hybrid fusion
+  * Reranking
+
+#### 5.2.3 Generation Flow
+
+* Scaffolded via `RagService`
+* `/api/chat` not yet implemented
+
+---
+
+## 6. Tech Stack
+
+* Python 3.10+
+* FastAPI + Uvicorn
+* Jinja2
+* Pydantic
+* Docling
+* SentenceTransformers + PyTorch
+* Qdrant
+* rank-bm25
+* KeyBERT
+* NumPy
+
+---
+
+## 7. Project Structure
+
+| Path                    | Role        | Key Contents         |
+| ----------------------- | ----------- | -------------------- |
+| backend/app/main.py     | Entry point | App init             |
+| backend/app/api/routes/ | API layer   | health, upload, chat |
+| backend/app/ingestion/  | Processing  | parser, chunker      |
+| backend/app/indexing/   | Embeddings  | vector store         |
+| backend/app/retrieval/  | Retrieval   | semantic, BM25       |
+| backend/app/generation/ | Generation  | prompt, pipeline     |
+| backend/app/services/   | Services    | ingestion, rag       |
+| backend/evaluation/     | Evaluation  | metrics              |
+| frontend/templates/     | UI          | HTML                 |
+| data/raw/               | Input       | uploaded files       |
+| data/processed/         | Output      | processed chunks     |
+
+---
+
+## 8. Installation
+
+### 8.1 Prerequisites
+
+* Python 3.10+
+* Qdrant running on `localhost:6333`
+
+### 8.2 Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage / How to Run
+---
+
+## 9. Usage
+
 ```bash
 uvicorn backend.app.main:app --reload
 ```
 
-Optional API check:
+### 9.1 Health Check
+
 ```bash
 curl http://127.0.0.1:8000/api/health
 ```
 
-## Example Workflow
-1. Start Qdrant (if you want semantic/hybrid retrieval enabled).
-2. Start the FastAPI app.
-3. Open `/chat`.
-4. Upload a document through UI or `POST /api/upload`.
-5. Verify generated artifacts in `data/processed/`.
-6. Run retrieval modules against indexed chunks.
-7. Integrate retrieval context with generation once `RagService` is completed.
+---
 
-## Configuration
-- Environment variables (read in `backend/app/core/config.py`):
-  - `GOOGLE_API_KEY`
-  - `GEMINI_API_KEY`
-- Retrieval defaults:
-  - Qdrant host: `localhost`
-  - Qdrant port: `6333`
-  - Collection: `documents`
-- Model defaults are configured in class constructors (for embedding and reranking components).
+## 10. Example Workflow
 
-## Future Improvements
-- Implement end-to-end answer generation for `/api/chat`.
-- Wire generation modules with retrieval context and citation grounding.
-- Add CI badges (tests/lint) once automated workflows are available.
-- Expand tests into a standard pytest suite with fixtures.
-- Finalize `docker-compose.yml` for one-command local setup.
+1. Start Qdrant
+2. Run FastAPI app
+3. Open `/chat`
+4. Upload document
+5. Check processed files
+6. Run retrieval
+7. Integrate generation
+
+---
+
+## 11. Configuration
+
+### 11.1 Environment Variables
+
+* `GOOGLE_API_KEY`
+* `GEMINI_API_KEY`
+
+### 11.2 Defaults
+
+* Qdrant Host: `localhost`
+* Port: `6333`
+* Collection: `documents`
+
+---
+
+## 12. Future Improvements
+
+* Implement full `/api/chat` generation
+* Add citation grounding
+* CI/CD integration
+* Pytest-based testing
+* Docker Compose setup

@@ -76,9 +76,7 @@ class ModelRegistry:
         )
 
         if os.getenv("OPENROUTER_API_KEY"):
-            model_name = os.getenv(
-                "OPENROUTER_MODEL", "qwen/qwen3-next-80b-a3b-instruct:free"
-            )
+            model_name = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
             print(
                 "\n",
                 f"[MODEL_REGISTRY] OPENROUTER_API_KEY found. Initializing OpenRouter primary: {model_name}",

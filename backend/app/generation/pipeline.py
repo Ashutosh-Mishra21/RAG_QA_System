@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +15,17 @@ class GenerationPipeline:
         self.generator = generator
         self.validator = validator
 
-    def run(self, query: str, metadata_filters=None) -> Dict[str, Any]:
+    def run(
+        self,
+        query: str,
+        original_query: Optional[str] = None,
+        metadata_filters=None,
+    ) -> Dict[str, Any]:
         retrieved = self.retriever.retrieve(
-            query=query, top_k=40, metadata_filters=metadata_filters or {}
+            query=query,
+            original_query=original_query,
+            top_k=40,
+            metadata_filters=metadata_filters or {},
         )
         print("Retrieved:", len(retrieved))
 
