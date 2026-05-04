@@ -6,7 +6,7 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 
 
 class LLMCache:
-    def __init__(self, cache_dir=BASE_DIR / "data/cache"):
+    def __init__(self, cache_dir=BASE_DIR / "data/cache/llm_cache"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 

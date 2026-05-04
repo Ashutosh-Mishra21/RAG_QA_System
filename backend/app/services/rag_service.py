@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from backend.app.core import ModelRegistry
+from backend.app.core import ModelRegistry, ResponseCache
 from backend.app.services.ingestion_service import IngestionService
 
 from backend.app.generation import (
@@ -22,7 +22,7 @@ from backend.app.retrieval import (
 class RagService:
     def __init__(self, storage_dir=None) -> None:
         registry = ModelRegistry.instance()
-
+        self.response_cache = ResponseCache()
         # 🔹 Ingestion (optional usage)
         self.ingestion_service = IngestionService(storage_dir) if storage_dir else None
 
@@ -74,7 +74,7 @@ class RagService:
         """
 
         try:
-            final_answer, _, _ = self.generator.llm_router.generate(prompt)
+            final_answer, _, _ = self.pipeline.generator.llm_router.generate(prompt)
             return final_answer
         except:
             return " ".join(answers)
@@ -83,6 +83,10 @@ class RagService:
     # 🔹 QUERY → ANSWER (Phase 2)
     # =========================
     def answer(self, query: str, metadata_filters=None) -> dict:
+        cached = self.response_cache.get(query)
+        if cached:
+            print("[CACHE HIT]")
+            return cached
 
         # 🔥 STEP 1: Decompose
         subqueries = self.decomposer.decompose(query)
@@ -92,7 +96,7 @@ class RagService:
             print(f"{i+1}. {sq}")
 
         all_answers = []
-        all_sources = []
+        all_citations = []
 
         # 🔥 STEP 2: Solve each subquery
         max_hops = 1  # 🔥 control explosion
@@ -107,7 +111,7 @@ class RagService:
             )
 
             all_answers.append(result["answer"])
-            all_sources.extend(result.get("sources", []))
+            all_citations.extend(result.get("citations", []))
 
             # 🔥 STEP 3: Multi-hop follow-up
             for _ in range(max_hops):
@@ -123,7 +127,7 @@ class RagService:
                     {query}
 
                     Current Answer:
-                    {result["answer"]}
+                    {all_answers[-1]}
 
                     Follow-up query:
                 """
@@ -146,17 +150,23 @@ class RagService:
                     )
 
                     all_answers.append(followup_result["answer"])
-                    all_sources.extend(followup_result.get("sources", []))
+                    all_citations.extend(followup_result.get("citations", []))
 
                 except Exception:
                     break
 
         final_answer = self.aggregate_answers(query, all_answers)
-
-        return {
+        unique_sources = list(
+            {(s.get("document_id"), s.get("section")): s for s in all_citations}.values()
+        )
+        result = {
             "answer": final_answer,
-            "sources": all_sources,
+            "citations": list(set(all_citations)),  # or extract later
+            "confidence": min(1.0, len(all_answers) / 3),
+            "sources": unique_sources,
         }
+        self.response_cache.set(query, result)
+        return result
 
     # =========================
     # 🔥 EVALUATION ENTRYPOINT (Phase 3)
