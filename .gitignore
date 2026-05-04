@@ -102,4 +102,12 @@ docker-data/
 # Evaluation Outputs
 # ===============================
 evaluation_outputs/
-ragas_results/
+ragas_results/-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
