@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only Playwright E2E testing for Agentic RAG QA UI. All 14 specified flows passed. Landing page renders with all testids, navigation to /chat works, chat page renders sidebar + empty state + 4 suggestions + input, backend at http://localhost:8000 is unreachable (as designed) and UI correctly shows red error banner + error AI bubble mentioning the API URL, user bubble persists, input clears after send, Enter sends, Shift+Enter adds newline, Send disabled when empty, Clear resets to empty state, Back-to-Home navigates to /, unknown routes redirect to /, file upload attempts POST /api/upload which fails and shows a doc item with 'failed' status without crashing. Dark theme (#0B0F19) confirmed via body bg rgb(11,15,25).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TypingIndicator renders briefly (<1s) because axios ERR_NETWORK resolves almost instantly on a closed port; not a bug but user may not see the typing state when backend is offline. Consider a minimum display delay (e.g., 300ms) for better perceived feedback.",
+    "WebSocket warning 'ws://localhost:443/ws' connection refused originates from WDS_SOCKET_PORT=443 in /app/frontend/.env — harmless for production but noisy in dev console.",
+    "React Router v6 future-flag warnings (v7_startTransition, v7_relativeSplatPath) — minor, cosmetic."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not tested per request)", "frontend": "100%"},
+  "test_credentials": "none required",
+  "seed_data_creation": "Created /tmp/upload_test/test.txt (20B) to test upload failure path.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "UI fully verified against the 14 items. Backend at localhost:8000 is intentionally offline — error-state UX is the expected pass criterion. data-testids all present: landing-page, hero-try-demo-btn, hero-upload-doc-btn, features-section, how-it-works-section, site-navbar, site-footer, hero-chat-preview, chat-page, chat-sidebar, sidebar-new-chat-btn, sidebar-upload-btn, sidebar-empty-docs, sidebar-file-input, sidebar-doc-item, chat-empty-state, suggestion-0..3, chat-input, chat-send-btn, chat-clear-btn, chat-back-home-btn, chat-error-banner, chat-message-user, chat-message-ai, typing-indicator.",
+  "rca of the issue": "N/A — no issues found."
+}
