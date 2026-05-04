@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Upload, FileText, Plus, Sparkles, Trash2, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
-import { uploadDocument } from "../lib/api";
+import { uploadDocument, API_BASE_URL } from "../lib/api";
 
 export default function Sidebar({ history = [], onNewChat, onSelect, activeId, onDocumentUploaded }) {
   const fileRef = useRef(null);
@@ -199,7 +199,7 @@ export default function Sidebar({ history = [], onNewChat, onSelect, activeId, o
         <div className="text-[11px] text-muted">
           API:&nbsp;
           <span className="font-mono text-text/80 break-all">
-            {process.env.REACT_APP_API_URL || process.env.REACT_APP_BACKEND_URL || "http://localhost:8000"}
+            {API_BASE_URL || "(same origin / proxy)"}
           </span>
         </div>
       </div>

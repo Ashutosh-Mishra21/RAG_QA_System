@@ -1,10 +1,14 @@
 import axios from "axios";
 
-// Base URL for the RAG backend. Defaults to http://localhost:8000 as specified.
-export const API_BASE_URL =
-  process.env.REACT_APP_API_URL ||
-  process.env.REACT_APP_BACKEND_URL ||
-  "http://localhost:8000";
+/**
+ * Base URL for the RAG backend.
+ *
+ * - When empty (default in production build), the frontend is served by
+ *   FastAPI itself, so relative "/api" paths hit the same origin.
+ * - In local dev, Vite proxies "/api" to VITE_API_PROXY_TARGET (see vite.config.js).
+ * - Set VITE_API_URL to override with a full URL (e.g. http://localhost:8000).
+ */
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -24,12 +28,13 @@ export async function sendChatMessage(message) {
 
 /**
  * POST /api/upload   (multipart/form-data)
- * Optional — used by the sidebar upload button if the backend supports it.
+ * Used by the sidebar upload button.
  */
 export async function uploadDocument(file, onProgress) {
   const form = new FormData();
   form.append("file", file);
-  const res = await axios.post(`${API_BASE_URL}/api/upload`, form, {
+  const url = `${API_BASE_URL}/api/upload`;
+  const res = await axios.post(url, form, {
     headers: { "Content-Type": "multipart/form-data" },
     onUploadProgress: (e) => {
       if (onProgress && e.total) onProgress(Math.round((e.loaded * 100) / e.total));
