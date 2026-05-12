@@ -9,6 +9,7 @@ import pytest
 from qdrant_client import QdrantClient
 
 from backend.app.core import ModelRegistry
+from backend.app.core.config import settings
 from backend.app.generation import (
     AnswerValidator,
     ContextBuilder,
@@ -26,13 +27,13 @@ from backend.app.ingestion import (
 from backend.app.models import Chunk, ChunkMetadata
 from backend.app.retrieval import HybridRetriever, SemanticRetriever
 
-QDRANT_HOST = "localhost"
-QDRANT_PORT = 6333
-
 
 def _qdrant_available() -> bool:
     try:
-        QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT).get_collections()
+        QdrantClient(
+            url=settings.QDRANT_URL,
+            api_key=settings.QDRANT_API_KEY,
+        ).get_collections()
         return True
     except Exception:
         return False
@@ -99,9 +100,7 @@ def _ingest_documents(
     enricher = registry.get_enricher()
     embedder = registry.get_embedder()
     keyword_index = registry.get_keyword_index()
-    vector_store = VectorStore(
-        collection_name=collection_name, host=QDRANT_HOST, port=QDRANT_PORT
-    )
+    vector_store = VectorStore(collection_name=collection_name)
 
     all_chunks: List[Chunk] = []
 
@@ -163,13 +162,16 @@ def _build_generation_pipeline(
 
 def test_full_pipeline_ingestion_to_generation_real_components() -> None:
     if not _qdrant_available():
-        pytest.skip("Qdrant is not reachable at localhost:6333")
+        pytest.skip("Qdrant Cloud is not reachable with the configured QDRANT_URL")
 
     markdown_files = _load_raw_markdown_files()
     registry = ModelRegistry.instance()
 
     collection_name = f"test_full_pipeline_{uuid.uuid4().hex[:8]}"
-    qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    qdrant_client = QdrantClient(
+        url=settings.QDRANT_URL,
+        api_key=settings.QDRANT_API_KEY,
+    )
     DEBUG_KEEP_DATA = True
 
     try:
@@ -178,8 +180,6 @@ def test_full_pipeline_ingestion_to_generation_real_components() -> None:
 
         semantic = SemanticRetriever(
             collection_name=collection_name,
-            host=QDRANT_HOST,
-            port=QDRANT_PORT,
             top_k=8,
             embedder=registry.get_embedder(),
         )

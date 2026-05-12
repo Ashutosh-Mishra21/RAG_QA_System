@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 def evaluate_strategy(agentic_retriever, test_queries, evaluator):
 
     for q in test_queries:
@@ -7,6 +12,9 @@ def evaluate_strategy(agentic_retriever, test_queries, evaluator):
 
         metrics = evaluator.evaluate(q, results)
 
-        print("Query:", q)
-        print("Strategy:", output["strategy"])
-        print(metrics)
+        logger.info(
+            "Evaluation feedback | query=%s | strategy=%s | metrics=%s",
+            q,
+            output["strategy"],
+            metrics,
+        )

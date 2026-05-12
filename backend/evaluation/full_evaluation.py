@@ -1,15 +1,19 @@
+import logging
+from pathlib import Path
+
 from backend.app.services.rag_service import RagService
 from backend.evaluation.generation_evaluator import GenerationEvaluator
 from backend.evaluation.evaluator import RetrievalEvaluator
 from backend.app.core.model_registry import ModelRegistry
-from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def run_full_evaluation():
 
     rag = RagService(storage_dir=Path("data"))
     for file in Path("data/raw").glob("*"):
-        print("Ingesting:", file)
+        logger.info("Ingesting evaluation file: %s", file)
         rag.ingest(str(file))
 
     llm = ModelRegistry.instance().get_llm_router()
@@ -24,11 +28,9 @@ def run_full_evaluation():
         data_dir=None,
     )
 
-    print("\n===== Retrieval Metrics =====")
-    print(retrieval_scores)
+    logger.info("Retrieval metrics: %s", retrieval_scores)
 
-    print("\n===== Generation Metrics =====")
-    print(generation_scores)
+    logger.info("Generation metrics: %s", generation_scores)
 
 
 if __name__ == "__main__":

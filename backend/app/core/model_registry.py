@@ -10,10 +10,6 @@ from backend.app.retrieval import CrossEncoderReranker
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -77,24 +73,16 @@ class ModelRegistry:
 
         if os.getenv("OPENROUTER_API_KEY"):
             model_name = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-            print(
-                "\n",
-                f"[MODEL_REGISTRY] OPENROUTER_API_KEY found. Initializing OpenRouter primary: {model_name}",
-            )
             logger.info(
                 "[MODEL_REGISTRY] Initializing primary LLM provider: OpenRouter (%s)",
                 model_name,
             )
             try:
                 primary = OpenRouterLLM(model=model_name)
-                print("[MODEL_REGISTRY] Primary provider ready: OpenRouter")
                 logger.info(
                     "[MODEL_REGISTRY] Primary LLM provider initialized successfully"
                 )
             except Exception as exc:
-                print(
-                    f"[MODEL_REGISTRY] Primary provider init failed. API will be skipped: {exc}"
-                )
                 logger.exception(
                     "[MODEL_REGISTRY] Failed to initialize OpenRouterLLM: %s", exc
                 )

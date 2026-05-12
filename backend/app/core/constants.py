@@ -1,1 +1,2 @@
 APP_NAME = "RAG QA System"
+APP_VERSION = "1.0.0"

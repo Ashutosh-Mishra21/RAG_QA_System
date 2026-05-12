@@ -1,0 +1,28 @@
+services:
+    backend:
+        container_name: rag-qa-backend
+        build:
+            context: .
+            dockerfile: backend/Dockerfile
+        env_file:
+            - .env
+        environment:
+            # Ollama usually runs on the developer machine, not inside this compose
+            # file. host.docker.internal lets the backend container reach the host.
+            OLLAMA_BASE_URL: http://host.docker.internal:11434
+        extra_hosts:
+            # Enables host.docker.internal on Linux Docker engines as well.
+            - "host.docker.internal:host-gateway"
+        ports:
+            - "8000:8000"
+        volumes:
+            # Persist runtime logs and uploaded/cached data outside the container.
+            - ./backend/logs:/app/backend/logs
+            - ./data:/app/data
+        restart: unless-stopped
+        networks:
+            - rag-qa-network
+
+networks:
+    rag-qa-network:
+        driver: bridge

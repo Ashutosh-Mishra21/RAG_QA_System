@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
+from backend.app.core.config import settings
 from backend.app.indexing import Embedder
 from backend.app.models import Chunk, ChunkMetadata
 
@@ -8,15 +9,16 @@ from backend.app.models import Chunk, ChunkMetadata
 class SemanticRetriever:
     def __init__(
         self,
-        collection_name: str = "documents",
-        host: str = "localhost",
-        port: int = 6333,
+        collection_name: str = settings.QDRANT_COLLECTION,
         top_k: int = 5,
         embedder: Optional[Embedder] = None,
     ):
         self.collection_name = collection_name
         self.top_k = top_k
-        self.client = QdrantClient(host=host, port=port)
+        self.client = QdrantClient(
+            url=settings.QDRANT_URL,
+            api_key=settings.QDRANT_API_KEY,
+        )
         self.embedder = embedder or Embedder()
 
     def build_filter(

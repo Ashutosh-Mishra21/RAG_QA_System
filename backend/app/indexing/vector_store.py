@@ -8,18 +8,20 @@ from qdrant_client.models import (
     MatchValue,
 )
 from typing import List, Optional, Dict, Any
+from backend.app.core.config import settings
 from backend.app.models import Chunk, ChunkMetadata
 
 
 class VectorStore:
     def __init__(
         self,
-        collection_name: str = "documents",
-        host: str = "localhost",
-        port: int = 6333,
+        collection_name: str = settings.QDRANT_COLLECTION,
     ):
         self.collection_name = collection_name
-        self.client = QdrantClient(host=host, port=port)
+        self.client = QdrantClient(
+            url=settings.QDRANT_URL,
+            api_key=settings.QDRANT_API_KEY,
+        )
 
     def _ensure_collection(self, vector_size: int):
         collections = self.client.get_collections().collections

@@ -5,7 +5,6 @@ from typing import Optional, Tuple
 
 from backend.app.core.llm_cache import LLMCache
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

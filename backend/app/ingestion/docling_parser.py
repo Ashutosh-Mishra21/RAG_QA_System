@@ -54,14 +54,23 @@ class DoclingParser:
         if suffix in {".md", ".markdown", ".txt"}:
             return self._parse_markdown(path)
 
+        docling_supported = {
+            ".pdf",
+            ".docx",
+            ".xlsx",
+        }
         # ❗ Optional: block unsupported formats early (prevents DLL crash)
-        if suffix not in {".pdf", ".docx"}:
+        if suffix not in docling_supported:
             raise ValueError(f"Unsupported file type: {suffix}")
 
-        # ✅ Only now attempt docling
-        converter = self._get_docling_converter()
-        result = converter.convert(str(path))
-        return result.document
+        try:
+            # ✅ Only now attempt docling
+            converter = self._get_docling_converter()
+            result = converter.convert(str(path))
+            return result.document
+        except Exception as e:
+            # Re-wrap or log the error so you know WHICH file failed
+            raise RuntimeError(f"Docling failed to parse {path.name}: {e}")
 
     def _parse_markdown(self, file_path: Path) -> _SimpleDocument:
         text = file_path.read_text(encoding="utf-8")

@@ -17,9 +17,25 @@ const client = axios.create({
 });
 
 /**
+ * @typedef {Object} ChatData
+ * @property {string} answer
+ * @property {string[]} citations
+ * @property {number} confidence
+ * @property {Object[]} sources
+ *
+ * @typedef {Object} ChatApiResponse
+ * @property {true} success
+ * @property {ChatData} data
+ * @property {null} error
+ */
+
+/**
  * POST /api/chat
  * body: { message: string }
- * returns: { answer, citations, confidence, sources }
+ * returns: { success: true, data: { answer, citations, confidence, sources }, error: null }
+ *
+ * @param {string} message
+ * @returns {Promise<ChatApiResponse>}
  */
 export async function sendChatMessage(message) {
   const res = await client.post("/api/chat", { message });

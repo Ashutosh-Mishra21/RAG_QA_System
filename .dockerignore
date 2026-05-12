@@ -1,15 +1,37 @@
+# Version control and local editor state
 .git
 .github
 .gitignore
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files are loaded by docker-compose via env_file, not baked into
+# images. This keeps secrets out of Docker layers.
 .env
-.env.local
-__pycache__
+.env.*
+
+# Python virtualenvs, bytecode, and test artifacts
+venv/
+.venv/
+ENV/
+env/
+__pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Python build output
 build/
-develop-eggs/
 dist/
 downloads/
 eggs/
@@ -23,23 +45,24 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-venv/
-ENV/
-env/
-.vscode
-.idea
-*.swp
-*.swo
-*~
-.DS_Store
+
+# Frontend dependencies and generated build output. The Dockerfile builds
+# frontend/dist in a dedicated Node stage.
 node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Runtime logs, uploads, notebooks, and local caches should be mounted or
+# regenerated, not copied into production images.
+logs/
+backend/logs/
 notebooks/
 data/
-*.md
-README.md
+**/cache/
+**/.cache/
+data/cache/
+data/embeddings/
+
+# Local-only Docker variants
 Dockerfile.dev
 docker-compose.dev.yml

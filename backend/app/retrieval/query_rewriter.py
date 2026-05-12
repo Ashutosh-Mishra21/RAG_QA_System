@@ -1,5 +1,8 @@
-from typing import List
+import logging
 import re
+from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 class QueryRewriter:
@@ -34,11 +37,14 @@ REWRITTEN QUERY:
             rewritten = rewritten.strip().replace("\n", " ")
 
             if len(rewritten) < 5:
+                logger.warning("Query rewrite too short; using original query")
                 return query
 
+            logger.info("Query rewritten successfully")
             return rewritten
 
         except Exception:
+            logger.exception("Query rewrite failed; using original query")
             return query
 
     # -------------------------
@@ -79,10 +85,13 @@ Return ONLY a list (one per line).
 
             # fallback safety
             if not queries:
+                logger.warning("Multi-query generation returned no usable queries")
                 return [query]
 
             # limit
+            logger.info("Generated %s alternative search queries", len(queries[:3]))
             return queries[:3]
 
         except Exception:
+            logger.exception("Multi-query generation failed; using original query")
             return [query]

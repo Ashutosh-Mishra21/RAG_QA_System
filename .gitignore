@@ -1,5 +1,5 @@
 # ===============================
-# Secrets & Environment
+# 🔐 Secrets & Environment
 # ===============================
 .env
 .env.*
@@ -8,9 +8,11 @@
 secrets.*
 *.key
 *.pem
+credentials.json
+.credentials
 
 # ===============================
-# Python
+# 🐍 Python
 # ===============================
 __pycache__/
 *.py[cod]
@@ -25,7 +27,7 @@ __pycache__/
 htmlcov/
 
 # ===============================
-# Virtual Environments
+# 🧪 Virtual Environments
 # ===============================
 .venv/
 venv/
@@ -33,12 +35,12 @@ env/
 ENV/
 
 # ===============================
-# Jupyter
+# 📓 Jupyter
 # ===============================
 .ipynb_checkpoints/
 
 # ===============================
-# Logs & Temporary Files
+# 📄 Logs & Temp Files
 # ===============================
 *.log
 logs/
@@ -50,7 +52,7 @@ temp/
 *.swp
 
 # ===============================
-# OS / Editor
+# 💻 OS / Editor
 # ===============================
 .DS_Store
 Thumbs.db
@@ -58,7 +60,7 @@ Thumbs.db
 .idea/
 
 # ===============================
-# Build / Distribution
+# 🏗️ Backend Build / Artifacts
 # ===============================
 build/
 dist/
@@ -68,16 +70,28 @@ dist/
 pip-wheel-metadata/
 
 # ===============================
-# Data & Generated Artifacts
+# ⚛️ Frontend (Vite / Node)
+# ===============================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+frontend/.eslintcache
+
+# ===============================
+# 📦 Data & Vector Stores
 # ===============================
 Data/
 backend/app/Data/
 backend/app/vector_db/
 backend/app/processed_chunks/
+
+# Vector DB / embeddings
 **/vector_store/
 **/vectorstores/
 **/embeddings/
 **/index/
+
 *.faiss
 *.index
 *.ann
@@ -85,38 +99,28 @@ backend/app/processed_chunks/
 *.npz
 
 # ===============================
-# Model / Cache Artifacts
+# 🤖 Model / Cache Artifacts
 # ===============================
 .cache/
 huggingface/
 sentence_transformers/
 
 # ===============================
-# Docker
+# 🐳 Docker
 # ===============================
 *.pid
 docker-data/
 .env.docker
 
 # ===============================
-# Evaluation Outputs
+# 📊 Evaluation Outputs
 # ===============================
 evaluation_outputs/
-ragas_results/-e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
+ragas_results/
+
+# ===============================
+# 🧹 Misc
+# ===============================
+*.bak
+*.backup
+*.old

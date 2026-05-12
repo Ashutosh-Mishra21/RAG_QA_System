@@ -1,4 +1,7 @@
+import logging
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 
 class QueryDecomposer:
@@ -32,9 +35,15 @@ class QueryDecomposer:
                     subqueries.append(line)
 
             if not subqueries:
+                logger.warning("Query decomposition returned no usable subqueries")
                 return [query]
 
+            logger.info(
+                "Query decomposition produced %s subquery/subqueries",
+                len(subqueries[:3]),
+            )
             return subqueries[:3]
 
         except Exception:
+            logger.exception("Query decomposition failed; using original query")
             return [query]

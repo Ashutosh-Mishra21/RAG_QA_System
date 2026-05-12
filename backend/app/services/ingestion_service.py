@@ -1,16 +1,20 @@
+import logging
 import uuid
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import List
+
 from backend.app.core.model_registry import ModelRegistry
+from backend.app.indexing import VectorStore
 from backend.app.ingestion import (
     DoclingParser,
     StructureBuilder,
     NodeChunker,
     flatten_tree,
 )
-from backend.app.indexing import VectorStore
 from backend.app.models import Chunk, ChunkMetadata
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionService:
@@ -28,6 +32,13 @@ class IngestionService:
 
         with open(file_path, "wb") as f:
             f.write(file_bytes)
+
+        logger.info(
+            "Saved uploaded file: filename=%s stored_as=%s document_id=%s",
+            filename,
+            new_filename,
+            document_id,
+        )
 
         return {
             "document_id": document_id,
@@ -91,12 +102,18 @@ class IngestionService:
         if embeddings:
             try:
                 vector_store.upsert_chunks(enriched, embeddings)
-            except Exception as e:
+            except Exception as exc:
                 # Retrieval can still work via keyword index when vector db is unavailable.
-                print("❌ Qdrant upsert failed:", e)
+                logger.exception("Qdrant upsert failed: %s", exc)
                 raise
 
         registry.get_keyword_index().add(enriched)
+
+        logger.info(
+            "Ingestion completed: document_id=%s chunks_indexed=%s",
+            document_id,
+            len(enriched),
+        )
 
         return {
             "document_id": document_id,

@@ -1,7 +1,10 @@
+import logging
 from typing import Any, Dict, Optional
 
 from backend.app.core import ModelRegistry
 from backend.app.retrieval import HybridRetriever, SemanticRetriever
+
+logger = logging.getLogger(__name__)
 
 
 class RetrievalService:
@@ -29,21 +32,23 @@ def main():
     service = RetrievalService()
 
     query = "Explain the embedding pipeline design"
-    print(f"\n🔎 Query: {query}\n")
+    logger.info("Query: %s", query)
 
     results = service.retrieve(query=query, top_k=5)
 
     if not results:
-        print("❌ No results found.")
+        logger.warning("No results found")
         return
 
     for i, r in enumerate(results, 1):
-        print(f"Result {i}")
-        print("Score:", round(r.score or 0.0, 4))
-        print("Document ID:", r.metadata.get("document_id"))
-        print("Section:", r.metadata.get("section"))
-        print("Content:\n", r.content[:500])
-        print("-" * 80)
+        logger.info(
+            "Result %s | score=%s | document_id=%s | section=%s | content=%s",
+            i,
+            round(r.score or 0.0, 4),
+            r.metadata.get("document_id"),
+            r.metadata.get("section"),
+            r.content[:500],
+        )
 
 
 if __name__ == "__main__":

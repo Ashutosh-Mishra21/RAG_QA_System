@@ -27,12 +27,12 @@ class GenerationPipeline:
             top_k=40,
             metadata_filters=metadata_filters or {},
         )
-        print("Retrieved:", len(retrieved))
+        logger.info("[PIPELINE] Retrieved chunks: %s", len(retrieved))
 
         reranked = self.reranker.rerank(query, retrieved)  # ✅ first define
 
         top_chunks = reranked[:5]  # ✅ then use it
-        print("Top chunks:", len(top_chunks))
+        logger.info("[PIPELINE] Top chunks after rerank: %s", len(top_chunks))
 
         context, citation_map = self.context_builder.build(top_chunks)
 
@@ -49,9 +49,6 @@ class GenerationPipeline:
         logger.info("[PIPELINE] Provider used for initial generation: %s", provider)
 
         fallback_triggered = expected_provider == "api" and provider == "local"
-        print(
-            f"[PIPELINE] Provider result: expected={expected_provider}, actual={provider}, fallback_triggered={fallback_triggered}"
-        )
         logger.info(
             "[PIPELINE] Fallback triggered: %s (expected=%s, actual=%s)",
             fallback_triggered,

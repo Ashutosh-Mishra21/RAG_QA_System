@@ -28,7 +28,7 @@ export default function Navbar() {
           <a href="/#features" className="hover:text-text transition-colors">Features</a>
           <a href="/#how" className="hover:text-text transition-colors">How it works</a>
           <a
-            href="https://github.com/"
+            href="https://github.com/Ashutosh-Mishra21/RAG_QA_System"
             target="_blank"
             rel="noreferrer"
             className="hover:text-text transition-colors"

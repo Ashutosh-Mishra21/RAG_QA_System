@@ -30,8 +30,10 @@ python -m venv .venv
 # 3) Install dependencies
 pip install -r requirements.txt
 
-# 4) (Optional but recommended for retrieval) Start Qdrant
-docker run -p 6333:6333 qdrant/qdrant
+# 4) Configure Qdrant Cloud in .env
+QDRANT_URL=https://<cluster>.cloud.qdrant.io
+QDRANT_API_KEY=<api_key>
+QDRANT_COLLECTION=rag_documents
 
 # 5) Run the app
 uvicorn backend.app.main:app --reload
@@ -141,7 +143,7 @@ flowchart LR
 ### Prerequisites
 
 - Python 3.10+
-- Qdrant instance at `localhost:6333` for retrieval/indexing features
+- Qdrant Cloud cluster URL and API key for retrieval/indexing features
 
 ### Install dependencies
 
@@ -163,7 +165,7 @@ curl http://127.0.0.1:8000/api/health
 
 ## Example Workflow
 
-1. Start Qdrant (if you want semantic/hybrid retrieval enabled).
+1. Configure Qdrant Cloud in `.env`.
 2. Start the FastAPI app.
 3. Open `/chat`.
 4. Upload a document through UI or `POST /api/upload`.
@@ -177,9 +179,9 @@ curl http://127.0.0.1:8000/api/health
   - `GOOGLE_API_KEY`
   - `GEMINI_API_KEY`
 - Retrieval defaults:
-  - Qdrant host: `localhost`
-  - Qdrant port: `6333`
-  - Collection: `documents`
+  - Qdrant URL: `https://<cluster>.cloud.qdrant.io`
+  - Qdrant API key: `<api_key>`
+  - Collection: `rag_documents`
 - Model defaults are configured in class constructors (for embedding and reranking components).
 
 ## Future Improvements
