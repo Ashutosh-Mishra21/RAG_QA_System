@@ -100,11 +100,17 @@ class DoclingParser:
 
         try:
             from docling.document_converter import DocumentConverter
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
         except Exception as exc:
             raise RuntimeError(
                 "Docling is required for PDF/DOCX parsing but failed to load. "
                 "This is likely due to missing native dependencies (DLLs) on your system."
             ) from exc
 
-        self.converter = DocumentConverter()
+        # Disable OCR
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = False
+
+        self.converter = DocumentConverter(pdf_pipeline_options=pipeline_options)
+
         return self.converter

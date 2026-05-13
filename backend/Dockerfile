@@ -54,8 +54,7 @@ RUN useradd -m -u 1000 appuser
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    HF_HOME=/tmp/huggingface \
-    TRANSFORMERS_CACHE=/tmp/huggingface
+    HF_HOME=/tmp/huggingface
 
 COPY --from=python-builder /opt/venv /opt/venv
 
