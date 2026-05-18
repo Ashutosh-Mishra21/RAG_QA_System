@@ -28,10 +28,10 @@ flowchart LR
     U[User] --> FE[React + Vite + Tailwind]
     FE --> API[FastAPI Backend]
 
-    API --> UP[/api/upload]
-    API --> CH[/api/chat]
-    API --> EV[/api/evaluation]
-    API --> HL[/api/health]
+    API --> UP["/api/upload"]
+    API --> CH["/api/chat"]
+    API --> EV["/api/evaluation"]
+    API --> HL["/api/health"]
 
     UP --> ING[IngestionService]
     ING --> RAW[(data/raw)]
