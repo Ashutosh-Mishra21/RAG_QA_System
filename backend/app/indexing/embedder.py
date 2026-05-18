@@ -12,7 +12,7 @@ class Embedder:
 
     def __init__(
         self,
-        model_name: str = r"D:\PROGRAMMING\OpenModels\HuggingFaceModels\hub\models--BAAI--bge-large-en-v1.5\snapshots\d4aa6901d3a41ba39fb536a557fa166f842b0e09",
+        model_name: str = r"BAAI/bge-large-en-v1.5",
         batch_size: int = 32,
         cache_path: Path | None = None,
     ):

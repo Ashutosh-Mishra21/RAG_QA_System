@@ -113,7 +113,7 @@ class DoclingParser:
 
         # PDF pipeline config
         pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = False
+        pipeline_options.do_ocr = True
 
         # ✅ NEW API
         self.converter = DocumentConverter(
