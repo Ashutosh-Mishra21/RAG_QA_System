@@ -3,13 +3,14 @@ from sentence_transformers import SentenceTransformer
 from typing import List
 from backend.app.models import Chunk, ChunkMetadata
 import torch
+from backend.app.core.config import Settings
 
 
 class ChunkEnricher:
 
     def __init__(
         self,
-        embedding_model: str = r"BAAI/bge-large-en-v1.5",
+        embedding_model: str = Settings.EMBEDDING_MODEL,
         top_k_keywords: int = 5,
     ):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

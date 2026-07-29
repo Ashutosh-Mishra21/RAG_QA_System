@@ -72,7 +72,7 @@ class ModelRegistry:
         )
 
         if os.getenv("OPENROUTER_API_KEY"):
-            model_name = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
+            model_name = os.getenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
             logger.info(
                 "[MODEL_REGISTRY] Initializing primary LLM provider: OpenRouter (%s)",
                 model_name,

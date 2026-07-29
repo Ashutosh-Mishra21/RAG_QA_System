@@ -4,6 +4,10 @@ import torch
 import hashlib
 import json
 from pathlib import Path
+from backend.app.core.config import Settings
+
+# from filelock import FileLock
+# import os
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
@@ -12,7 +16,7 @@ class Embedder:
 
     def __init__(
         self,
-        model_name: str = r"BAAI/bge-large-en-v1.5",
+        model_name: str = Settings.EMBEDDING_MODEL,
         batch_size: int = 32,
         cache_path: Path | None = None,
     ):
@@ -41,6 +45,25 @@ class Embedder:
 
     def _save_cache(self) -> None:
         self.cache_file.write_text(json.dumps(self._cache, indent=2), encoding="utf-8")
+
+    # def _save_cache(self) -> None:
+    #     lock = FileLock(str(self.cache_file) + ".lock")
+
+    #     with lock:
+    #         # Re-read because another process may have added embeddings
+    #         disk_cache = self._load_cache()
+    #         disk_cache.update(self._cache)
+
+    #         temp_file = self.cache_file.with_suffix(".tmp")
+    #         temp_file.write_text(
+    #             json.dumps(disk_cache),
+    #             encoding="utf-8",
+    #         )
+
+    #         # Atomic replacement
+    #         os.replace(temp_file, self.cache_file)
+
+    #         self._cache = disk_cache
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
         if not texts:
