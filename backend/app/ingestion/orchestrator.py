@@ -5,9 +5,6 @@ from .docling_parser import DoclingParser
 from .structure_builder import StructureBuilder
 from .node_chunker import NodeChunker
 from .tree_flattener import flatten_tree
-from .enrichment import ChunkEnricher
-
-from backend.app.indexing import Embedder, VectorStore
 from backend.app.core.config import settings
 from backend.app.core.embedding_provider import EmbeddingModelProvider
 
@@ -79,7 +76,7 @@ class IngestionOrchestrator:
         document = self.parser.parse(file_path)
 
         # 2. Build hierarchical tree
-        tree = self.builder.build_tree(document)
+        tree = self.builder.build_tree(document, document_id=document_id)
 
         # 3. Semantic chunking
         for root in tree:
@@ -132,82 +129,3 @@ class IngestionOrchestrator:
             "flat_file": str(flat_output_path),
             "num_chunks": len(flat_chunks),
         }
-
-
-class EmbeddingPipeline:
-
-    def __init__(self):
-
-        # =====================================================
-        # ONE SHARED BGE MODEL
-        # =====================================================
-
-        self.embedding_model = EmbeddingModelProvider(
-            settings.EMBEDDING_MODEL
-        ).get_model()
-
-        # =====================================================
-        # ENRICHMENT
-        # =====================================================
-
-        self.enricher = ChunkEnricher(embedding_model=self.embedding_model)
-
-        # =====================================================
-        # EMBEDDING WRAPPER
-        # =====================================================
-
-        self.embedder = Embedder(
-            model=self.embedding_model,
-            batch_size=settings.EMBEDDING_BATCH_SIZE,
-        )
-
-        # =====================================================
-        # VECTOR STORE
-        # =====================================================
-
-        self.vector_store = VectorStore()
-
-    def process_chunks(
-        self,
-        chunks,
-    ):
-
-        if not chunks:
-            return
-
-        # =====================================================
-        # 1. ENRICH
-        # =====================================================
-
-        enriched = [self.enricher.enrich(chunk) for chunk in chunks]
-
-        # =====================================================
-        # 2. EMBEDDING TEXT
-        # =====================================================
-
-        texts = [
-            getattr(
-                chunk,
-                "embedding_text",
-                chunk.content,
-            )
-            for chunk in enriched
-        ]
-
-        # =====================================================
-        # 3. EMBEDDINGS
-        # =====================================================
-
-        embeddings = self.embedder.embed_documents(texts)
-
-        if not embeddings:
-            return
-
-        # =====================================================
-        # 4. VECTOR DB
-        # =====================================================
-
-        self.vector_store.upsert_chunks(
-            enriched,
-            embeddings,
-        )

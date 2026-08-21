@@ -7,6 +7,8 @@ class StructureChunk(BaseModel):
     node_id: str
     text: str
     token_count: int = 0
+    page_number: Optional[int] = None
+    source_bbox: Optional[dict] = None
 
 
 class StructureFragment(BaseModel):
@@ -15,6 +17,8 @@ class StructureFragment(BaseModel):
     text: str
     fragment_type: str = "paragraph"
     list_group_id: Optional[str] = None
+    page_number: Optional[int] = None
+    source_bbox: Optional[dict] = None
 
 
 class DocumentNode(BaseModel):

@@ -3,6 +3,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pathlib import Path
 from backend.app.api.responses import success_response
 from backend.app.services import IngestionService
+from backend.app.core.config import settings
 
 router = APIRouter(tags=["upload"])
 logger = logging.getLogger(__name__)
@@ -20,8 +21,19 @@ def get_ingestion_service() -> IngestionService:
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     try:
+        if not file.filename or Path(file.filename).suffix.lower() not in {
+            ".md",
+            ".markdown",
+            ".txt",
+            ".pdf",
+            ".docx",
+            ".xlsx",
+        }:
+            raise HTTPException(status_code=415, detail="Unsupported file type")
         logger.info("Upload received: %s", file.filename)
-        file_bytes = await file.read()
+        file_bytes = await file.read(settings.MAX_UPLOAD_BYTES + 1)
+        if len(file_bytes) > settings.MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Uploaded file is too large")
         service = get_ingestion_service()
         saved = service.save_file(filename=file.filename, file_bytes=file_bytes)
         pipeline_result = service.ingest_and_index(saved["file_path"])
@@ -39,5 +51,7 @@ async def upload_document(file: UploadFile = File(...)):
             }
         )
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
         logger.exception("Upload failed for %s: %s", file.filename, exc)
         raise HTTPException(status_code=500, detail="Upload failed") from exc

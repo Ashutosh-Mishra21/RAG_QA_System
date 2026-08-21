@@ -27,9 +27,10 @@ class FakeEmbeddingModel:
 
 
 class FakeElement:
-    def __init__(self, text, label):
+    def __init__(self, text, label, page_number=None):
         self.text = text
         self.label = type("Label", (), {"name": label})()
+        self.page_number = page_number
 
 
 class FakeDocument:
@@ -92,3 +93,17 @@ def test_structure_builder_groups_consecutive_list_items():
 
     assert len({fragment.list_group_id for fragment in fragments}) == 1
     assert all(fragment.fragment_type == "list_item" for fragment in fragments)
+
+
+def test_structure_ids_and_provenance_are_deterministic():
+    elements = [
+        FakeElement("# Methods", "TITLE"),
+        FakeElement("Method text.", "TEXT", page_number=3),
+    ]
+
+    first = StructureBuilder().build_tree(FakeDocument(elements), document_id="doc")
+    second = StructureBuilder().build_tree(FakeDocument(elements), document_id="doc")
+
+    assert first[0].node_id == second[0].node_id
+    assert first[0].fragments[0].fragment_id == second[0].fragments[0].fragment_id
+    assert first[0].fragments[0].page_number == 3

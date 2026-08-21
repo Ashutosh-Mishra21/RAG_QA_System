@@ -3,6 +3,7 @@ from .structure_builder import StructureBuilder
 from .node_chunker import NodeChunker
 from .tree_flattener import flatten_tree
 from .enrichment import ChunkEnricher
+from .chunk_factory import ChunkFactory
 
 __all__ = [
     "DoclingParser",
@@ -10,4 +11,5 @@ __all__ = [
     "NodeChunker",
     "flatten_tree",
     "ChunkEnricher",
+    "ChunkFactory",
 ]

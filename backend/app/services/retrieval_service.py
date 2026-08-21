@@ -13,6 +13,7 @@ class RetrievalService:
         self.retriever = HybridRetriever(
             dense_retriever=SemanticRetriever(embedder=registry.get_embedder()),
             keyword_index=registry.get_keyword_index(),
+            embedder=registry.get_embedder(),
         )
 
     def retrieve(

@@ -70,7 +70,7 @@ flowchart LR
 - Chunk enrichment with KeyBERT keywords, language metadata, hierarchy paths, importance scores, page numbers, and source file data.
 - SentenceTransformer embeddings with local embedding cache under `data/embeddings`.
 - Qdrant Cloud vector database integration with metadata filtering and collection auto-creation.
-- Keyword retrieval using an in-memory keyword/BM25-style index.
+- Keyword retrieval using a persisted, versioned BM25 index with fingerprint validation.
 - Hybrid retrieval with dynamic dense/keyword weighting, weighted Reciprocal Rank Fusion (RRF), multi-query expansion, deduplication, and MMR selection.
 - Batched BGE sentence encoding for semantic boundaries and deterministic UUID5 chunk IDs for repeatable re-indexing.
 - Cross-encoder reranking with `cross-encoder/ms-marco-MiniLM-L-6-v2`.
@@ -142,7 +142,9 @@ Flattened chunks receive document identity, source, hierarchy, page number when 
 
 ### Hybrid Retrieval
 
-The retrieval service queries Qdrant and the in-memory BM25 index with the same query and optional metadata filters. Results are deduplicated, fused with weighted Reciprocal Rank Fusion, adjusted by the existing hierarchy heuristic, and passed through MMR. Cross-encoder reranking remains optional and runs after hybrid fusion.
+The retrieval service queries Qdrant and the persisted BM25 index with the same query and optional metadata filters. Results are validated, deduplicated, ranked deterministically, and fused with weighted Reciprocal Rank Fusion. Dense retrieval failures are logged and fall back to sparse retrieval; results are then adjusted by the existing hierarchy heuristic and passed through vector-aware MMR. Cross-encoder reranking remains optional and runs after hybrid fusion.
+
+The BM25 index is stored at `data/index/bm25.json`, includes a schema version and corpus fingerprint, and is atomically replaced under a file lock. A corrupted or stale index is rejected and rebuilt by subsequent ingestion. Existing documents should be re-indexed once after enabling persistence.
 
 ## API Contract
 

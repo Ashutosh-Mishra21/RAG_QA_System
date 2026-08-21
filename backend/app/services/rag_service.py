@@ -18,6 +18,7 @@ from backend.app.retrieval import (
     QueryRewriter,
     QueryDecomposer,
 )
+from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class RagService:
             dense_retriever=SemanticRetriever(embedder=registry.get_embedder()),
             keyword_index=registry.get_keyword_index(),
             query_rewriter=self.query_rewriter,
+            embedder=registry.get_embedder(),
         )
         # 🔥 inject rewriter
         self.retriever.query_rewriter = self.query_rewriter
@@ -119,7 +121,9 @@ class RagService:
             final_answer, _, _ = self.pipeline.generator.llm_router.generate(prompt)
             return final_answer
         except Exception:
-            logger.exception("Answer aggregation failed; returning concatenated answers")
+            logger.exception(
+                "Answer aggregation failed; returning concatenated answers"
+            )
             return " ".join(answers)
 
     # =========================
@@ -131,7 +135,11 @@ class RagService:
         metadata_filters=None,
         document_id: str | None = None,
     ) -> dict:
-        filters = metadata_filters or {}
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("Query must not be empty")
+        if len(query) > settings.RETRIEVAL_MAX_QUERY_CHARS:
+            raise ValueError("Query exceeds the maximum supported length")
+        filters = dict(metadata_filters or {})
         if document_id:
             filters["document_id"] = document_id
 
@@ -140,8 +148,12 @@ class RagService:
             logger.info("Response cache hit for query (document_id=%s)", document_id)
             return self._normalize_chat_result(cached)
 
-        # 🔥 STEP 1: Decompose
-        subqueries = self.decomposer.decompose(query)
+        # Keep simple questions cheap; reserve decomposition for multi-part queries.
+        words = query.split()
+        is_complex = len(words) > 12 or any(
+            marker in query.lower() for marker in (" and ", "compare", "versus", " vs ")
+        )
+        subqueries = self.decomposer.decompose(query) if is_complex else [query]
 
         logger.info("Query decomposed into %s subquery/subqueries", len(subqueries))
         for i, sq in enumerate(subqueries, start=1):
@@ -155,7 +167,7 @@ class RagService:
         max_hops = 1  # 🔥 control explosion
 
         for sq in subqueries:
-            rewritten_sq = self.query_rewriter.rewrite(sq)
+            rewritten_sq = self.query_rewriter.rewrite(sq) if is_complex else sq
 
             result = self.pipeline.run(
                 query=rewritten_sq,
@@ -169,8 +181,13 @@ class RagService:
             all_citations.extend(result.get("citations", []))
             all_sources.extend(result.get("sources", []))
 
-            # 🔥 STEP 3: Multi-hop follow-up
-            for _ in range(max_hops):
+            # Retry only when evidence is weak; avoid unconditional LLM/tool calls.
+            should_follow_up = (
+                is_complex
+                and result["confidence"] < 0.45
+                and bool(result.get("sources"))
+            )
+            for _ in range(max_hops if should_follow_up else 0):
                 followup_prompt = f"""
                     Based on the answer below, generate a follow-up query to improve understanding.
 
@@ -214,7 +231,11 @@ class RagService:
                     logger.exception("Multi-hop follow-up failed for query: %s", query)
                     break
 
-        final_answer = self.aggregate_answers(query, all_answers)
+        final_answer = (
+            all_answers[0]
+            if len(all_answers) == 1
+            else self.aggregate_answers(query, all_answers)
+        )
         unique_sources = list(
             {
                 (s.get("document_id"), s.get("section")): s

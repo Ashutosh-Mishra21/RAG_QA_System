@@ -1,5 +1,4 @@
 import logging
-import hashlib
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +11,7 @@ from backend.app.ingestion import (
     StructureBuilder,
     NodeChunker,
     flatten_tree,
+    ChunkFactory,
 )
 from backend.app.models import Chunk, ChunkMetadata
 from backend.app.core.config import settings
@@ -66,7 +66,7 @@ class IngestionService:
         )
 
         document = parser.parse(fp)
-        tree = builder.build_tree(document)
+        tree = builder.build_tree(document, document_id=document_id)
         for root in tree:
             chunker.merge_chunks(root)
 
@@ -78,42 +78,11 @@ class IngestionService:
             document_type=document_type,
         )
 
-        chunks: List[Chunk] = []
-        for idx, flat in enumerate(flat_chunks):
-            heading_path = flat.get("heading_path", [])
-            hierarchy_path = [h.get("heading", "") for h in heading_path]
-            content = flat.get("text", "")
-            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
-            stable_key = ":".join(
-                [
-                    document_id,
-                    " > ".join(hierarchy_path),
-                    str(flat.get("chunk_index", idx)),
-                    content_hash,
-                ]
-            )
-            chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, stable_key))
-
-            chunk = Chunk(
-                id=chunk_id,
-                content=content,
-            )
-            chunk.attach_metadata(
-                ChunkMetadata(
-                    document_id=document_id,
-                    source_file=fp.name,
-                    document_type=document_type,
-                    title=flat.get("title"),
-                    section=flat.get("section"),
-                    subsection=flat.get("subsection"),
-                    hierarchy_path=hierarchy_path,
-                    page_number=flat.get("page_number"),
-                    chunk_index=flat.get("chunk_index", idx),
-                    summary=flat.get("summary"),
-                    language=flat.get("language", "en"),
-                )
-            )
-            chunks.append(chunk)
+        factory = ChunkFactory()
+        chunks: List[Chunk] = [
+            factory.create(flat, document_id, fp.name, document_type)
+            for flat in flat_chunks
+        ]
 
         enricher = registry.get_enricher()
         enriched = [enricher.enrich(chunk) for chunk in chunks]

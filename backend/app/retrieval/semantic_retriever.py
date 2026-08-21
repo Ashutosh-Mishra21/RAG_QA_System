@@ -6,6 +6,10 @@ from backend.app.indexing import Embedder
 from backend.app.models import Chunk, ChunkMetadata
 
 
+class DenseRetrievalError(RuntimeError):
+    """Raised when query embedding or dense storage retrieval fails."""
+
+
 class SemanticRetriever:
     def __init__(
         self,
@@ -40,8 +44,13 @@ class SemanticRetriever:
         metadata_filters: Optional[Dict[str, Any]] = None,
         top_k: Optional[int] = None,
     ) -> List[Chunk]:
-        top_k = top_k or self.top_k
-        query_vector = self.embedder.embed_query(query)
+        top_k = min(max(1, top_k or self.top_k), settings.RETRIEVAL_MAX_TOP_K)
+        try:
+            query_vector = self.embedder.embed_query(query)
+        except Exception as exc:
+            raise DenseRetrievalError("Dense query embedding failed") from exc
+        if not query_vector:
+            raise DenseRetrievalError("Dense query embedding returned no vector")
         search_filter = self.build_filter(metadata_filters)
 
         try:
@@ -51,9 +60,10 @@ class SemanticRetriever:
                 query_filter=search_filter,
                 limit=top_k,
                 with_payload=True,
+                with_vectors=True,
             ).points
-        except Exception:
-            return []
+        except Exception as exc:
+            raise DenseRetrievalError("Dense vector retrieval failed") from exc
 
         chunks: List[Chunk] = []
         for hit in results:
@@ -64,6 +74,11 @@ class SemanticRetriever:
                 content=str(payload.get("content", "")),
                 metadata=metadata if isinstance(metadata, dict) else {},
                 score=float(hit.score) if hit.score is not None else None,
+                embedding=(
+                    list(hit.vector)
+                    if isinstance(getattr(hit, "vector", None), list)
+                    else None
+                ),
             )
             structured = self._try_build_structured_metadata(chunk.metadata)
             if structured is not None:

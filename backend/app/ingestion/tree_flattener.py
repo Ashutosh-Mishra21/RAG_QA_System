@@ -49,6 +49,7 @@ def flatten_tree(
                     "token_count": chunk.token_count,
                     "chunk_index": next_chunk_index,
                     "page_number": getattr(chunk, "page_number", None),
+                    "source_bbox": getattr(chunk, "source_bbox", None),
                     "summary": node.summary,
                 }
             )

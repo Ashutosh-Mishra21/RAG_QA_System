@@ -35,6 +35,7 @@ class ChunkMetadata(BaseModel):
 class Chunk(BaseModel):
     id: str
     content: str
+    embedding: Optional[List[float]] = Field(default=None, exclude=True)
 
     # Flattened metadata (for vector DBs / filtering)
     metadata: Dict[str, Any] = Field(default_factory=dict)

@@ -142,6 +142,8 @@ class NodeChunker:
         self,
         node_id: str,
         sentences: List[str],
+        page_number: int | None = None,
+        source_bbox: dict | None = None,
     ) -> StructureChunk:
 
         text = " ".join(sentences).strip()
@@ -151,6 +153,8 @@ class NodeChunker:
             node_id=node_id,
             text=text,
             token_count=self.count_tokens(text),
+            page_number=page_number,
+            source_bbox=source_bbox,
         )
 
     # =========================================================
@@ -297,16 +301,20 @@ class NodeChunker:
         fragments,
     ) -> List[StructureChunk]:
         """Preserve consecutive list groups while applying semantic chunking."""
-        units: list[tuple[str, str]] = []
+        units: list[tuple[str, str, int | None, dict | None]] = []
         list_group_id = None
         list_items: list[str] = []
+        list_page = None
+        list_bbox = None
 
         def flush_list() -> None:
-            nonlocal list_group_id, list_items
+            nonlocal list_group_id, list_items, list_page, list_bbox
             if list_items:
-                units.append(("\n".join(list_items), "list"))
+                units.append(("\n".join(list_items), "list", list_page, list_bbox))
             list_group_id = None
             list_items = []
+            list_page = None
+            list_bbox = None
 
         for fragment in fragments:
             if fragment.fragment_type == "list_item" and fragment.list_group_id:
@@ -314,20 +322,35 @@ class NodeChunker:
                     flush_list()
                 list_group_id = fragment.list_group_id
                 list_items.append(fragment.text.strip())
+                list_page = list_page if list_page is not None else fragment.page_number
+                list_bbox = list_bbox or fragment.source_bbox
                 continue
 
             flush_list()
-            units.append((fragment.text.strip(), "paragraph"))
+            units.append(
+                (
+                    fragment.text.strip(),
+                    "paragraph",
+                    fragment.page_number,
+                    fragment.source_bbox,
+                )
+            )
 
         flush_list()
 
         chunks: list[StructureChunk] = []
-        for unit, unit_type in units:
+        for unit, unit_type, page_number, source_bbox in units:
             if unit_type == "list":
                 for piece in self.split_oversized_sentence(unit):
-                    chunks.append(self.create_chunk(node_id, [piece]))
+                    chunks.append(
+                        self.create_chunk(node_id, [piece], page_number, source_bbox)
+                    )
             else:
-                chunks.extend(self.semantic_chunk(node_id=node_id, text=unit))
+                semantic_chunks = self.semantic_chunk(node_id=node_id, text=unit)
+                for chunk in semantic_chunks:
+                    chunk.page_number = page_number
+                    chunk.source_bbox = source_bbox
+                chunks.extend(semantic_chunks)
         return chunks
 
     # =========================================================

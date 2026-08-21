@@ -1,6 +1,11 @@
+import logging
+import math
 from typing import Dict, List, Optional, Any
 import numpy as np
 from backend.app.models import Chunk
+from backend.app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class HybridRetriever:
@@ -9,12 +14,16 @@ class HybridRetriever:
         dense_retriever,
         keyword_index,
         query_rewriter=None,
+        embedder=None,
         temperature: float = 1.0,
     ):
         self.dense = dense_retriever
         self.keyword = keyword_index
         self.query_rewriter = query_rewriter
+        self.embedder = embedder
         self.temperature = temperature
+        self.rrf_k = settings.RRF_K
+        self.mmr_lambda = settings.MMR_LAMBDA
 
     def _importance_weight(self, metadata: Dict[str, Any]) -> float:
         hierarchy = metadata.get("hierarchy_path")
@@ -43,7 +52,7 @@ class HybridRetriever:
         return 0.6, 0.4
 
     def _similarity(self, c1, c2):
-        if not hasattr(c1, "embedding") or not hasattr(c2, "embedding"):
+        if c1.embedding is None or c2.embedding is None:
             return 0.0
 
         v1 = np.array(c1.embedding)
@@ -54,28 +63,26 @@ class HybridRetriever:
 
         return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
 
-    def _mmr(self, chunks: List[Chunk], k: int = 5, lambda_param: float = 0.85):
+    def _mmr(self, chunks: List[Chunk], k: int = 5, lambda_param: float | None = None):
         if not chunks:
             return []
 
-        if lambda_param is None:
-            if len(chunks) < 10:
-                lambda_param = 0.9  # fewer chunks → prioritize relevance
-            else:
-                lambda_param = 0.8  # more chunks → allow diversity
+        lambda_param = self.mmr_lambda if lambda_param is None else lambda_param
+        lambda_param = min(1.0, max(0.0, lambda_param))
 
         selected = [chunks[0]]
         candidates = chunks[1:]
 
         while candidates and len(selected) < k:
-            best_score = -1
+            best_score = float("-inf")
             best_idx = 0
 
             for i, c in enumerate(candidates):
                 relevance = c.score or 0.0
 
-                diversity = (
-                    max([self._similarity(c, s) for s in selected]) if selected else 0
+                diversity = max(
+                    (self._similarity(c, s) for s in selected),
+                    default=0.0,
                 )
 
                 score = lambda_param * relevance - (1 - lambda_param) * diversity
@@ -94,8 +101,11 @@ class HybridRetriever:
         keyword_results: list[Chunk],
         dense_weight: float = 0.6,
         keyword_weight: float = 0.4,
-        k: int = 60,
+        k: int | None = None,
     ) -> list[Chunk]:
+        k = self.rrf_k if k is None else max(1, k)
+        dense_results = self._best_by_id(dense_results)
+        keyword_results = self._best_by_id(keyword_results)
         merged: dict[str, dict] = {}
 
         for rank, chunk in enumerate(dense_results, start=1):
@@ -120,9 +130,68 @@ class HybridRetriever:
 
         return sorted(
             fused,
-            key=lambda chunk: chunk.score or 0.0,
-            reverse=True,
+            key=lambda chunk: (-(chunk.score or 0.0), chunk.id),
         )
+
+    def _weighted_query_rrf(
+        self,
+        dense_rankings: list[tuple[float, List[Chunk]]],
+        keyword_rankings: list[tuple[float, List[Chunk]]],
+        dense_weight: float,
+        keyword_weight: float,
+    ) -> list[Chunk]:
+        merged: dict[str, dict[str, Any]] = {}
+
+        for modality_weight, rankings in (
+            (dense_weight, dense_rankings),
+            (keyword_weight, keyword_rankings),
+        ):
+            for query_weight, candidates in rankings:
+                for rank, chunk in enumerate(candidates, start=1):
+                    entry = merged.setdefault(
+                        chunk.id,
+                        {"chunk": chunk.model_copy(deep=True), "score": 0.0},
+                    )
+                    entry["score"] += (
+                        modality_weight * query_weight / (self.rrf_k + rank)
+                    )
+
+        fused = []
+        for entry in merged.values():
+            chunk = entry["chunk"]
+            chunk.score = float(
+                entry["score"] * self._importance_weight(chunk.metadata)
+            )
+            fused.append(chunk)
+        return sorted(fused, key=lambda chunk: (-(chunk.score or 0.0), chunk.id))
+
+    @staticmethod
+    def _valid_candidates(results: List[Chunk]) -> List[Chunk]:
+        valid = []
+        for chunk in results:
+            if (
+                not isinstance(chunk, Chunk)
+                or not chunk.id
+                or not chunk.content.strip()
+            ):
+                continue
+            if chunk.score is None or not math.isfinite(float(chunk.score)):
+                continue
+            valid.append(chunk)
+        return valid
+
+    @staticmethod
+    def _best_by_id(results: List[Chunk]) -> List[Chunk]:
+        best: dict[str, Chunk] = {}
+        for chunk in HybridRetriever._valid_candidates(results):
+            current = best.get(chunk.id)
+            if current is None or (chunk.score, chunk.id) > (current.score, current.id):
+                best[chunk.id] = chunk
+        unique_content: dict[str, Chunk] = {}
+        for chunk in sorted(best.values(), key=lambda c: (-(c.score or 0.0), c.id)):
+            content_key = " ".join(chunk.content.casefold().split())
+            unique_content.setdefault(content_key, chunk)
+        return list(unique_content.values())
 
     def retrieve(
         self,
@@ -131,10 +200,20 @@ class HybridRetriever:
         metadata_filters: Optional[Dict[str, Any]] = None,
         original_query: Optional[str] = None,
     ) -> List[Chunk]:
+        if not isinstance(query, str) or not query.strip():
+            return []
+        if len(query) > settings.RETRIEVAL_MAX_QUERY_CHARS:
+            raise ValueError("Query exceeds the maximum supported length")
+        if metadata_filters and any(
+            not isinstance(key, str) or not key or len(key) > 100
+            for key in metadata_filters
+        ):
+            raise ValueError("Invalid metadata filter")
 
         # =========================
         # 🔥 STEP 1: Multi-query
         # =========================
+        top_k = min(max(1, top_k), settings.RETRIEVAL_MAX_TOP_K)
         queries = []
 
         if original_query:
@@ -175,69 +254,61 @@ class HybridRetriever:
             else:
                 query_weights.append(0.85)
 
-        all_dense_results = []
-        all_keyword_results = []
+        dense_rankings: list[tuple[float, List[Chunk]]] = []
+        keyword_rankings: list[tuple[float, List[Chunk]]] = []
 
         per_query_k = max(6, top_k * 2)
 
         for i, q in enumerate(queries):
             weight = query_weights[i]
 
-            dense = self.dense.retrieve(
-                q, top_k=per_query_k, metadata_filters=metadata_filters
-            )
-            for d in dense:
-                d = d.model_copy(deep=True)
-                d.score = (d.score or 0.0) * weight
-                all_dense_results.append(d)
+            try:
+                dense = self.dense.retrieve(
+                    q, top_k=per_query_k, metadata_filters=metadata_filters
+                )
+            except Exception:
+                logger.error("Dense retrieval failed for query variant", exc_info=True)
+                dense = []
+            dense_rankings.append((weight, self._best_by_id(dense)))
 
-            keyword = self.keyword.retrieve(
-                q, top_k=per_query_k, metadata_filters=metadata_filters
-            )
-            for k in keyword:
-                k = k.model_copy(deep=True)
-                k.score = (k.score or 0.0) * weight
-                all_keyword_results.append(k)
-
-        # =========================
-        # 🔥 STEP 3: Deduplicate
-        # =========================
-        def deduplicate(results):
-            seen = set()
-            unique = []
-
-            for r in results:
-                key = (r.metadata.get("document_id"), getattr(r, "id", None))
-
-                if key not in seen:
-                    seen.add(key)
-                    unique.append(r)
-
-            return unique
-
-        dense_results = deduplicate(all_dense_results)
-        keyword_results = deduplicate(all_keyword_results)
+            try:
+                keyword = self.keyword.retrieve(
+                    q, top_k=per_query_k, metadata_filters=metadata_filters
+                )
+            except Exception:
+                logger.exception("Sparse retrieval failed for query variant")
+                keyword = []
+            keyword_rankings.append((weight, self._best_by_id(keyword)))
 
         # =========================
-        # 🔥 STEP 4: Dynamic weighting
+        # 🔥 STEP 3: Dynamic weighting
         # =========================
         dense_weight, keyword_weight = self._dynamic_weights(query)
 
         # =========================
-        # 🔥 STEP 5: Reciprocal Rank Fusion
+        # 🔥 STEP 4: Weighted query-level Reciprocal Rank Fusion
         # =========================
-        fused = self._reciprocal_rank_fusion(
-            dense_results=dense_results,
-            keyword_results=keyword_results,
+        fused = self._weighted_query_rrf(
+            dense_rankings=dense_rankings,
+            keyword_rankings=keyword_rankings,
             dense_weight=dense_weight,
             keyword_weight=keyword_weight,
         )
 
         # =========================
-        # 🔥 STEP 6: Sort + return
+        # 🔥 STEP 5: Sort + return
         # =========================
 
-        fused.sort(key=lambda c: c.score or 0.0, reverse=True)
+        fused.sort(key=lambda c: (-(c.score or 0.0), c.id))
         candidates = fused[: top_k * 3]  # restrict pool
+
+        if self.embedder is not None:
+            missing = [chunk for chunk in candidates if chunk.embedding is None]
+            if missing:
+                vectors = self.embedder.embed_documents(
+                    [chunk.content for chunk in missing]
+                )
+                for chunk, vector in zip(missing, vectors):
+                    chunk.embedding = vector
 
         return self._mmr(candidates, k=top_k)

@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     EMBEDDING_BATCH_SIZE: int = 32
     ENABLE_KEYWORD_EXTRACTION: bool = True
     TOP_K_KEYWORDS: int = 5
+    BM25_INDEX_PATH: str = "data/index/bm25.json"
+    RETRIEVAL_MAX_TOP_K: int = 50
+    RETRIEVAL_MAX_QUERY_CHARS: int = 4000
+    MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
+    MMR_LAMBDA: float = 0.85
+    RRF_K: int = 60
 
     # =========================================
     # 🔹 RETRIEVAL
