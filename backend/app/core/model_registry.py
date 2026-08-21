@@ -7,6 +7,8 @@ from pathlib import Path
 
 from backend.app.indexing import Embedder, KeywordIndex
 from backend.app.retrieval import CrossEncoderReranker
+from backend.app.core.config import settings
+from backend.app.core.embedding_provider import EmbeddingModelProvider
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
@@ -19,6 +21,7 @@ class ModelRegistry:
 
     def __init__(self) -> None:
         self._embedder: Optional[Embedder] = None
+        self._embedding_provider = EmbeddingModelProvider(settings.EMBEDDING_MODEL)
         self._reranker: Optional[CrossEncoderReranker] = None
         self._enricher = None
         self._keyword_index: Optional[KeywordIndex] = None
@@ -33,7 +36,10 @@ class ModelRegistry:
 
     def get_embedder(self) -> Embedder:
         if self._embedder is None:
-            self._embedder = Embedder()
+            self._embedder = Embedder(
+                model=self._embedding_provider.get_model(),
+                batch_size=settings.EMBEDDING_BATCH_SIZE,
+            )
         return self._embedder
 
     def get_reranker(self) -> CrossEncoderReranker:
@@ -45,7 +51,11 @@ class ModelRegistry:
         if self._enricher is None:
             from backend.app.ingestion.enrichment import ChunkEnricher
 
-            self._enricher = ChunkEnricher()
+            self._enricher = ChunkEnricher(
+                embedding_model=self._embedding_provider.get_model(),
+                top_k_keywords=settings.TOP_K_KEYWORDS,
+                enabled=settings.ENABLE_KEYWORD_EXTRACTION,
+            )
         return self._enricher
 
     def get_keyword_index(self) -> KeywordIndex:

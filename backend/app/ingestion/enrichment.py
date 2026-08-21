@@ -1,29 +1,35 @@
+from typing import List
+
 from keybert import KeyBERT
 from sentence_transformers import SentenceTransformer
-from typing import List
+
 from backend.app.models import Chunk, ChunkMetadata
-import torch
-from backend.app.core.config import Settings
 
 
 class ChunkEnricher:
 
     def __init__(
         self,
-        embedding_model: str = Settings.EMBEDDING_MODEL,
+        embedding_model: SentenceTransformer | None = None,
         top_k_keywords: int = 5,
+        enabled: bool = True,
     ):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # Shared embedding model (GPU enabled if available)
-        self.embedding_model = SentenceTransformer(embedding_model, device=self.device)
+        self.embedding_model = embedding_model
+        self.enabled = enabled
 
-        self.keyword_model = KeyBERT(model=self.embedding_model)
+        self.keyword_model = (
+            KeyBERT(model=self.embedding_model) if enabled and embedding_model else None
+        )
 
         self.top_k_keywords = top_k_keywords
 
-    def extract_keywords(self, text: str) -> List[str]:
-        if not text.strip():
+    def extract_keywords(
+        self,
+        text: str,
+    ) -> List[str]:
+
+        if not self.enabled or self.keyword_model is None or not text.strip():
             return []
 
         keywords = self.keyword_model.extract_keywords(
@@ -33,34 +39,62 @@ class ChunkEnricher:
             top_n=self.top_k_keywords,
         )
 
-        return [kw[0] for kw in keywords]
+        return [keyword[0] for keyword in keywords]
 
-    def compute_importance(self, text: str, keywords: List[str]) -> float:
-        """
-        Importance heuristic:
-        - Longer chunks slightly more important
-        - Keyword-rich chunks slightly more important
-        """
-        length_score = min(len(text) / 1200, 1.0)
-        keyword_bonus = min(len(keywords) * 0.05, 0.2)
+    def compute_importance(
+        self,
+        text: str,
+        keywords: List[str],
+    ) -> float:
 
-        score = min(length_score + keyword_bonus, 1.0)
-        return round(score, 3)
+        length_score = min(
+            len(text) / 1200,
+            1.0,
+        )
 
-    def enrich(self, chunk: Chunk) -> Chunk:
+        keyword_bonus = min(
+            len(keywords) * 0.05,
+            0.2,
+        )
+
+        score = min(
+            length_score + keyword_bonus,
+            1.0,
+        )
+
+        return round(
+            score,
+            3,
+        )
+
+    def enrich(
+        self,
+        chunk: Chunk,
+    ) -> Chunk:
+
         keywords = self.extract_keywords(chunk.content)
+
         c = chunk.model_copy(deep=True)
-        importance = self.compute_importance(chunk.content, keywords)
+
+        importance = self.compute_importance(
+            chunk.content,
+            keywords,
+        )
 
         if c.structured_metadata:
-            meta: ChunkMetadata = c.structured_metadata.model_copy(deep=True)
+
+            meta = c.structured_metadata.model_copy(deep=True)
+
             meta.keywords = keywords
             meta.entities = []
             meta.importance_score = importance
+
             c.attach_metadata(meta)
+
             return c
 
         c.metadata["keywords"] = keywords
         c.metadata["entities"] = []
         c.metadata["importance_score"] = importance
+
         return c

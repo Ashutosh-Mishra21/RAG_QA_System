@@ -16,17 +16,6 @@ class HybridRetriever:
         self.query_rewriter = query_rewriter
         self.temperature = temperature
 
-    def _softmax(self, scores: List[float]) -> List[float]:
-        if not scores:
-            return []
-        arr = np.array(scores, dtype=float)
-        arr = arr - np.max(arr)
-        exp_scores = np.exp(arr / self.temperature)
-        denom = np.sum(exp_scores)
-        if denom == 0:
-            return [0.0 for _ in scores]
-        return (exp_scores / denom).tolist()
-
     def _importance_weight(self, metadata: Dict[str, Any]) -> float:
         hierarchy = metadata.get("hierarchy_path")
         if isinstance(hierarchy, str):
@@ -98,6 +87,42 @@ class HybridRetriever:
             selected.append(candidates.pop(best_idx))
 
         return selected
+
+    def _reciprocal_rank_fusion(
+        self,
+        dense_results: list[Chunk],
+        keyword_results: list[Chunk],
+        dense_weight: float = 0.6,
+        keyword_weight: float = 0.4,
+        k: int = 60,
+    ) -> list[Chunk]:
+        merged: dict[str, dict] = {}
+
+        for rank, chunk in enumerate(dense_results, start=1):
+            entry = merged.setdefault(
+                chunk.id,
+                {"chunk": chunk.model_copy(deep=True), "score": 0.0},
+            )
+            entry["score"] += dense_weight / (k + rank)
+
+        for rank, chunk in enumerate(keyword_results, start=1):
+            entry = merged.setdefault(
+                chunk.id,
+                {"chunk": chunk.model_copy(deep=True), "score": 0.0},
+            )
+            entry["score"] += keyword_weight / (k + rank)
+
+        fused = []
+        for entry in merged.values():
+            chunk = entry["chunk"]
+            chunk.score = entry["score"] * self._importance_weight(chunk.metadata)
+            fused.append(chunk)
+
+        return sorted(
+            fused,
+            key=lambda chunk: chunk.score or 0.0,
+            reverse=True,
+        )
 
     def retrieve(
         self,
@@ -194,57 +219,22 @@ class HybridRetriever:
         keyword_results = deduplicate(all_keyword_results)
 
         # =========================
-        # 🔥 STEP 4: Normalize scores
-        # =========================
-        dense_scores = self._softmax([c.score or 0.0 for c in dense_results])
-        keyword_scores = self._softmax([c.score or 0.0 for c in keyword_results])
-
-        # =========================
-        # 🔥 STEP 5: Dynamic weighting
+        # 🔥 STEP 4: Dynamic weighting
         # =========================
         dense_weight, keyword_weight = self._dynamic_weights(query)
 
         # =========================
-        # 🔥 STEP 6: Fusion
+        # 🔥 STEP 5: Reciprocal Rank Fusion
         # =========================
-        merged: Dict[str, Dict[str, Any]] = {}
-
-        for idx, chunk in enumerate(dense_results):
-            merged[chunk.id] = {
-                "chunk": chunk.model_copy(deep=True),
-                "dense": dense_scores[idx] if idx < len(dense_scores) else 0.0,
-                "keyword": 0.0,
-            }
-
-        for idx, chunk in enumerate(keyword_results):
-            entry = merged.setdefault(
-                chunk.id,
-                {
-                    "chunk": chunk.model_copy(deep=True),
-                    "dense": 0.0,
-                    "keyword": 0.0,
-                },
-            )
-            entry["keyword"] = keyword_scores[idx] if idx < len(keyword_scores) else 0.0
+        fused = self._reciprocal_rank_fusion(
+            dense_results=dense_results,
+            keyword_results=keyword_results,
+            dense_weight=dense_weight,
+            keyword_weight=keyword_weight,
+        )
 
         # =========================
-        # 🔥 STEP 7: Final scoring
-        # =========================
-        fused: List[Chunk] = []
-
-        for entry in merged.values():
-            chunk = entry["chunk"]
-
-            fusion_score = (
-                dense_weight * entry["dense"] + keyword_weight * entry["keyword"]
-            )
-
-            chunk.score = float(fusion_score * self._importance_weight(chunk.metadata))
-
-            fused.append(chunk)
-
-        # =========================
-        # 🔥 STEP 8: Sort + return
+        # 🔥 STEP 6: Sort + return
         # =========================
 
         fused.sort(key=lambda c: c.score or 0.0, reverse=True)

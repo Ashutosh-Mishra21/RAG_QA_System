@@ -10,6 +10,7 @@ from qdrant_client.models import (
 from typing import List, Optional, Dict, Any
 from backend.app.core.config import settings
 from backend.app.models import Chunk, ChunkMetadata
+from backend.app.indexing.schema_manager import SchemaManager
 
 
 class VectorStore:
@@ -23,20 +24,12 @@ class VectorStore:
             api_key=settings.QDRANT_API_KEY,
         )
 
-    def _ensure_collection(self, vector_size: int):
-        collections = self.client.get_collections().collections
-        existing = [c.name for c in collections]
+    def _ensure_collection(
+        self,
+        vector_size: int,
+    ):
 
-        if self.collection_name in existing:
-            return
-
-        self.client.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(
-                size=vector_size,
-                distance=Distance.COSINE,
-            ),
-        )
+        SchemaManager(self.client, self.collection_name, vector_size).ensure_schema()
 
     def upsert_chunks(self, chunks: List[Chunk], embeddings: List[List[float]]):
         if not chunks or not embeddings:

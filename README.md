@@ -51,7 +51,8 @@ flowchart LR
     DECOMP --> RET
     RET --> QD
     RET --> KW
-    RET --> MMR[MMR Diversity Selection]
+    RET --> RRF[Weighted Reciprocal Rank Fusion]
+    RRF --> MMR[MMR Diversity Selection]
     MMR --> RR[CrossEncoder Reranker]
     RR --> CTX[Context Builder]
     CTX --> PROMPT[Prompt Builder]
@@ -65,12 +66,13 @@ flowchart LR
 - Full-stack document Q&A app with FastAPI, React, Vite, Tailwind CSS, and Axios.
 - Upload flow that stores source files under `data/raw`.
 - Document parsing with Docling for PDF/DOCX/XLSX and a lightweight parser for Markdown/TXT.
-- Hierarchical document processing using structure building, node chunking, tree flattening, and metadata attachment.
+- Hierarchical document processing using structure building, list-aware semantic node chunking, tree flattening, and metadata propagation.
 - Chunk enrichment with KeyBERT keywords, language metadata, hierarchy paths, importance scores, page numbers, and source file data.
 - SentenceTransformer embeddings with local embedding cache under `data/embeddings`.
 - Qdrant Cloud vector database integration with metadata filtering and collection auto-creation.
 - Keyword retrieval using an in-memory keyword/BM25-style index.
-- Hybrid retrieval with dynamic dense/keyword weighting, score normalization, multi-query expansion, deduplication, and MMR selection.
+- Hybrid retrieval with dynamic dense/keyword weighting, weighted Reciprocal Rank Fusion (RRF), multi-query expansion, deduplication, and MMR selection.
+- Batched BGE sentence encoding for semantic boundaries and deterministic UUID5 chunk IDs for repeatable re-indexing.
 - Cross-encoder reranking with `cross-encoder/ms-marco-MiniLM-L-6-v2`.
 - Query rewriting, query decomposition, and a controlled multi-hop follow-up step.
 - RAG generation pipeline with context building, prompt construction, model routing, validation, citations, confidence scores, and source metadata.
@@ -91,7 +93,7 @@ flowchart LR
 | Parsing | Docling, custom Markdown/TXT parser |
 | Embeddings | SentenceTransformers, BAAI BGE models |
 | Vector DB | Qdrant Cloud |
-| Retrieval | Dense search, keyword search, hybrid fusion, MMR |
+| Retrieval | Dense search, BM25 keyword search, weighted RRF fusion, MMR |
 | Reranking | SentenceTransformers CrossEncoder |
 | Generation | OpenRouter, Ollama fallback |
 | Evaluation | Pytest, retrieval metrics, generation evaluators |
@@ -118,6 +120,29 @@ flowchart LR
 | `data/cache/` | Runtime response and LLM caches |
 | `docker-compose.yml` | Backend service for local containerized running |
 | `backend/Dockerfile` | Multi-stage Docker build for frontend + backend |
+
+### Ingestion and Chunking
+
+The ingestion path is structure-aware and does not merge content across heading nodes:
+
+```text
+DoclingParser
+  -> StructureBuilder
+  -> StructureFragment paragraphs/list groups
+  -> NodeChunker
+  -> metadata-complete flatten_tree()
+  -> ChunkEnricher
+  -> shared BGE Embedder
+  -> Qdrant + BM25
+```
+
+`NodeChunker` uses the tokenizer associated with `BAAI/bge-large-en-v1.5`, batches sentence embeddings according to `EMBEDDING_BATCH_SIZE`, and applies semantic similarity plus hard token limits. Consecutive list items are grouped before chunking and remain together unless the group exceeds the configured maximum.
+
+Flattened chunks receive document identity, source, hierarchy, page number when available, deterministic chunk indexes, and token counts. Final vector-store IDs are UUID5 values derived from the document, hierarchy, position, and content hash. Re-ingestion of an unchanged document therefore produces the same IDs.
+
+### Hybrid Retrieval
+
+The retrieval service queries Qdrant and the in-memory BM25 index with the same query and optional metadata filters. Results are deduplicated, fused with weighted Reciprocal Rank Fusion, adjusted by the existing hierarchy heuristic, and passed through MMR. Cross-encoder reranking remains optional and runs after hybrid fusion.
 
 ## API Contract
 
@@ -255,9 +280,16 @@ QDRANT_COLLECTION=rag_documents
 
 DEFAULT_TOP_K=5
 LOG_LEVEL=INFO
+
+CHUNK_MAX_TOKENS=400
+CHUNK_MIN_TOKENS=100
+CHUNK_SIMILARITY_THRESHOLD=0.70
+EMBEDDING_BATCH_SIZE=32
+ENABLE_KEYWORD_EXTRACTION=true
+TOP_K_KEYWORDS=5
 ```
 
-Note: `EMBEDDING_MODEL` is present in the settings model, but the current embedder and enrichment classes default to `BAAI/bge-large-en-v1.5` directly.
+`EMBEDDING_MODEL` defaults to `BAAI/bge-large-en-v1.5`. The model is shared through the embedding provider across chunking, enrichment, and final embedding. Changing the embedding model or vector dimension requires deleting/recreating the Qdrant collection and re-indexing documents; existing deterministic IDs do not migrate old records automatically.
 
 Frontend override:
 

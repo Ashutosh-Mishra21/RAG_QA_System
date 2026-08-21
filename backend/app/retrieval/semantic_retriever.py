@@ -41,7 +41,7 @@ class SemanticRetriever:
         top_k: Optional[int] = None,
     ) -> List[Chunk]:
         top_k = top_k or self.top_k
-        query_vector = self.embedder.embed_texts([query])[0]
+        query_vector = self.embedder.embed_query(query)
         search_filter = self.build_filter(metadata_filters)
 
         try:

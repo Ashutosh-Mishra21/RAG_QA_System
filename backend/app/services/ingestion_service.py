@@ -1,4 +1,5 @@
 import logging
+import hashlib
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from backend.app.ingestion import (
     flatten_tree,
 )
 from backend.app.models import Chunk, ChunkMetadata
+from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -49,54 +51,79 @@ class IngestionService:
         }
 
     def ingest_and_index(self, file_path: str) -> dict:
-        fp = Path(file_path)
+        fp = Path(file_path).resolve()
+        if self.raw_dir.resolve() not in fp.parents:
+            raise ValueError("file_path must remain inside the raw data directory")
         document_id = fp.stem
 
+        registry = ModelRegistry.instance()
+        embedder = registry.get_embedder()
         parser = DoclingParser()
         builder = StructureBuilder()
-        chunker = NodeChunker()
+        model = getattr(embedder, "model", None)
+        chunker = NodeChunker(
+            embedding_model=model, batch_size=settings.EMBEDDING_BATCH_SIZE
+        )
 
         document = parser.parse(fp)
         tree = builder.build_tree(document)
         for root in tree:
             chunker.merge_chunks(root)
 
-        flat_chunks = flatten_tree(tree)
+        document_type = fp.suffix.lstrip(".") or "unknown"
+        flat_chunks = flatten_tree(
+            tree,
+            document_id=document_id,
+            source_file=fp.name,
+            document_type=document_type,
+        )
 
         chunks: List[Chunk] = []
         for idx, flat in enumerate(flat_chunks):
             heading_path = flat.get("heading_path", [])
             hierarchy_path = [h.get("heading", "") for h in heading_path]
-            section = hierarchy_path[-1] if hierarchy_path else None
-            title = hierarchy_path[0] if hierarchy_path else None
+            content = flat.get("text", "")
+            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+            stable_key = ":".join(
+                [
+                    document_id,
+                    " > ".join(hierarchy_path),
+                    str(flat.get("chunk_index", idx)),
+                    content_hash,
+                ]
+            )
+            chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, stable_key))
 
             chunk = Chunk(
-                id=str(uuid.uuid4()),
-                content=flat.get("text", ""),
+                id=chunk_id,
+                content=content,
             )
             chunk.attach_metadata(
                 ChunkMetadata(
                     document_id=document_id,
                     source_file=fp.name,
-                    document_type=fp.suffix.lstrip(".") or "unknown",
-                    title=title,
-                    section=section,
+                    document_type=document_type,
+                    title=flat.get("title"),
+                    section=flat.get("section"),
                     subsection=flat.get("subsection"),
                     hierarchy_path=hierarchy_path,
                     page_number=flat.get("page_number"),
-                    chunk_index=idx,
+                    chunk_index=flat.get("chunk_index", idx),
                     summary=flat.get("summary"),
                     language=flat.get("language", "en"),
                 )
             )
             chunks.append(chunk)
 
-        registry = ModelRegistry.instance()
         enricher = registry.get_enricher()
         enriched = [enricher.enrich(chunk) for chunk in chunks]
 
-        embedder = registry.get_embedder()
-        embeddings = embedder.embed_texts([c.content for c in enriched])
+        embedding_texts = [
+            flat.get("embedding_text", c.content)
+            for flat, c in zip(flat_chunks, enriched)
+        ]
+        embed_documents = getattr(embedder, "embed_documents", embedder.embed_texts)
+        embeddings = embed_documents(embedding_texts)
 
         vector_store = VectorStore()
         if embeddings:

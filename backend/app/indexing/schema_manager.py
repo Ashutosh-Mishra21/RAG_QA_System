@@ -13,6 +13,14 @@ class SchemaManager:
         existing = [c.name for c in collections]
 
         if self.collection_name in existing:
+            info = self.client.get_collection(self.collection_name)
+            configured_size = info.config.params.vectors.size
+            if configured_size != self.vector_size:
+                raise ValueError(
+                    f"Qdrant collection '{self.collection_name}' expects vector dimension "
+                    f"{configured_size}, but the embedding model produces {self.vector_size}. "
+                    "Recreate/reindex the collection."
+                )
             return
 
         self.client.create_collection(

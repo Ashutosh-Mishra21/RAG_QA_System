@@ -6,7 +6,15 @@ class StructureChunk(BaseModel):
     chunk_id: str
     node_id: str
     text: str
-    tokens_count: int
+    token_count: int = 0
+
+
+class StructureFragment(BaseModel):
+    fragment_id: str
+    node_id: str
+    text: str
+    fragment_type: str = "paragraph"
+    list_group_id: Optional[str] = None
 
 
 class DocumentNode(BaseModel):
@@ -17,6 +25,7 @@ class DocumentNode(BaseModel):
     summary: Optional[str] = None
     chunks: List[StructureChunk] = Field(default_factory=list)
     children: List["DocumentNode"] = Field(default_factory=list)
+    fragments: List[StructureFragment] = Field(default_factory=list)
 
 
 DocumentNode.model_rebuild()

@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # 🔹 EMBEDDINGS
     # =========================================
     EMBEDDING_MODEL: str = "BAAI/bge-large-en-v1.5"
+    CHUNK_MAX_TOKENS: int = 400
+    CHUNK_MIN_TOKENS: int = 100
+    CHUNK_SIMILARITY_THRESHOLD: float = 0.70
+    EMBEDDING_BATCH_SIZE: int = 32
+    ENABLE_KEYWORD_EXTRACTION: bool = True
+    TOP_K_KEYWORDS: int = 5
 
     # =========================================
     # 🔹 RETRIEVAL

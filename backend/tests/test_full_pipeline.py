@@ -111,7 +111,12 @@ def _ingest_documents(
         for root in tree:
             chunker.merge_chunks(root)
 
-        flat_chunks = flatten_tree(tree)
+        flat_chunks = flatten_tree(
+            tree,
+            document_id=file_path.stem,
+            source_file=file_path.name,
+            document_type="md",
+        )
         chunks: List[Chunk] = []
         for idx, flat in enumerate(flat_chunks):
             heading_path = flat.get("heading_path", [])

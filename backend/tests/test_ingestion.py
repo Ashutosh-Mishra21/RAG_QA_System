@@ -37,7 +37,7 @@ def test_ingest_and_index(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         "backend.app.services.ingestion_service.flatten_tree",
-        lambda tree: [
+        lambda tree, **kwargs: [
             {
                 "text": "chunk one",
                 "heading_path": [{"heading": "Intro"}],

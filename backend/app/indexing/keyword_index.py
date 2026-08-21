@@ -1,3 +1,4 @@
+import re
 from typing import List, Optional, Dict, Any
 from rank_bm25 import BM25Okapi
 from backend.app.models import Chunk
@@ -8,8 +9,12 @@ class KeywordIndex:
         self.documents: List[Chunk] = []
         self.bm25: Optional[BM25Okapi] = None
 
+    @staticmethod
+    def tokenize(text: str) -> List[str]:
+        return re.findall(r"\b[\w.-]+\b", text.lower())
+
     def _rebuild(self) -> None:
-        tokenized_corpus = [doc.content.lower().split() for doc in self.documents]
+        tokenized_corpus = [self.tokenize(doc.content) for doc in self.documents]
         self.bm25 = BM25Okapi(tokenized_corpus) if tokenized_corpus else None
 
     def add(self, documents: List[Chunk]) -> None:
@@ -36,12 +41,12 @@ class KeywordIndex:
             ]
             if not candidates:
                 return []
-            tokenized_corpus = [doc.content.lower().split() for doc in candidates]
+            tokenized_corpus = [self.tokenize(doc.content) for doc in candidates]
             bm25 = BM25Okapi(tokenized_corpus)
         else:
             bm25 = self.bm25
 
-        tokenized_query = query.lower().split()
+        tokenized_query = self.tokenize(query)
         scores = bm25.get_scores(tokenized_query)
         ranked_indices = sorted(
             range(len(scores)), key=lambda i: float(scores[i]), reverse=True
