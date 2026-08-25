@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     RETRIEVAL_MAX_TOP_K: int = 50
     RETRIEVAL_MAX_QUERY_CHARS: int = 4000
     MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
+    MAX_PDF_PAGES: int = 500
+    MAX_PAGE_TEXT_CHARS: int = 2_000_000
+    MAX_PAGE_BLOCKS: int = 10_000
+    MANIFEST_SCHEMA_VERSION: int = 2
     MMR_LAMBDA: float = 0.85
     RRF_K: int = 60
 

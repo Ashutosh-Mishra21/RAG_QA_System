@@ -70,8 +70,9 @@ class HybridRetriever:
         lambda_param = self.mmr_lambda if lambda_param is None else lambda_param
         lambda_param = min(1.0, max(0.0, lambda_param))
 
-        selected = [chunks[0]]
-        candidates = chunks[1:]
+        ordered = sorted(chunks, key=lambda chunk: (-(chunk.score or 0.0), chunk.id))
+        selected = [ordered[0]]
+        candidates = ordered[1:]
 
         while candidates and len(selected) < k:
             best_score = float("-inf")
@@ -87,7 +88,9 @@ class HybridRetriever:
 
                 score = lambda_param * relevance - (1 - lambda_param) * diversity
 
-                if score > best_score:
+                if score > best_score or (
+                    score == best_score and c.id < candidates[best_idx].id
+                ):
                     best_score = score
                     best_idx = i
 

@@ -1,0 +1,7 @@
+# Optional specialist visual/document extraction
+-r requirements-core.txt
+# Install these only when evaluation shows Docling is insufficient.
+# MinerU and PaddleOCR are intentionally not pinned here because their
+# supported Python/CUDA combinations change independently of this project.
+# mineru
+# paddleocr

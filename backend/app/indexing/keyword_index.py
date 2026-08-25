@@ -77,6 +77,15 @@ class KeywordIndex:
         self._rebuild()
         self._save()
 
+    def delete_document(self, document_id: str) -> None:
+        self.documents = [
+            document
+            for document in self.documents
+            if document.metadata.get("document_id") != document_id
+        ]
+        self._rebuild()
+        self._save()
+
     def retrieve(
         self,
         query: str,

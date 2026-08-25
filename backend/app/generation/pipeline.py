@@ -20,13 +20,15 @@ class GenerationPipeline:
         query: str,
         original_query: Optional[str] = None,
         metadata_filters=None,
+        retrieved=None,
     ) -> Dict[str, Any]:
-        retrieved = self.retriever.retrieve(
-            query=query,
-            original_query=original_query,
-            top_k=40,
-            metadata_filters=metadata_filters or {},
-        )
+        if retrieved is None:
+            retrieved = self.retriever.retrieve(
+                query=query,
+                original_query=original_query,
+                top_k=40,
+                metadata_filters=metadata_filters or {},
+            )
         logger.info("[PIPELINE] Retrieved chunks: %s", len(retrieved))
 
         reranked = self.reranker.rerank(query, retrieved)  # ✅ first define

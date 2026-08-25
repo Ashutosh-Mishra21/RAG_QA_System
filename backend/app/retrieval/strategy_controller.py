@@ -3,11 +3,12 @@ from backend.app.retrieval.hybrid_retriever import HybridRetriever
 from backend.app.retrieval.reranker import CrossEncoderReranker
 from backend.app.retrieval.query_analyzer import QueryAnalyzer
 from backend.app.indexing.keyword_index import KeywordIndex
-from backend.app.core import ModelRegistry
 
 
 class AgenticRetriever:
     def __init__(self, documents):
+        from backend.app.core.model_registry import ModelRegistry
+
         registry = ModelRegistry.instance()
         embedder = registry.get_embedder()
         self.dense = SemanticRetriever(embedder=embedder)

@@ -1,0 +1,3 @@
+# Optional durable background ingestion workflows
+-r requirements-storage.txt
+temporalio==1.7.0

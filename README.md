@@ -107,9 +107,9 @@ flowchart LR
 | `backend/app/api/routes/` | API routes for chat, upload, health, and evaluation |
 | `backend/app/api/responses.py` | Shared success/error API response envelope |
 | `backend/app/core/` | Config, constants, logging, model registry, LLM cache, response cache |
-| `backend/app/models/` | Pydantic models for chunks, documents, queries, responses, and LLM providers |
+| `backend/app/models/` | Pydantic models for chunks, page manifests, canonical evidence, documents, queries, responses, and LLM providers |
 | `backend/app/services/` | High-level ingestion, retrieval, and RAG services |
-| `backend/app/ingestion/` | Docling parser, structure builder, node chunker, enrichment, tree flattening |
+| `backend/app/ingestion/` | Page scanning, canonicalization, Docling parser, structure builder, node chunker, enrichment, tree flattening |
 | `backend/app/indexing/` | Embedder, Qdrant vector store, schema manager, keyword index |
 | `backend/app/retrieval/` | Semantic retriever, BM25/keyword retriever, hybrid retriever, reranker, query analysis/rewrite/decomposition |
 | `backend/app/generation/` | Context builder, prompt builder, generator, citation manager, answer validator, generation pipeline |
@@ -120,6 +120,20 @@ flowchart LR
 | `data/cache/` | Runtime response and LLM caches |
 | `docker-compose.yml` | Backend service for local containerized running |
 | `backend/Dockerfile` | Multi-stage Docker build for frontend + backend |
+
+### Dependency Profiles
+
+The root `requirements.txt` installs the pinned core profile from `requirements-core.txt`. Optional capabilities are isolated so the base deployment does not inherit the heavier infrastructure stack:
+
+```text
+requirements-core.txt      API, parsing, retrieval, Stage 1 scanner, tests
+requirements-agent.txt     LangGraph and LangChain core
+requirements-storage.txt   S3, PostgreSQL, Redis
+requirements-workflow.txt  Temporal background workflows
+requirements-visual.txt    Specialist visual-parser placeholders
+```
+
+Install only the profile required by the deployment. The visual profile intentionally leaves MinerU and PaddleOCR commented out because their Python/CUDA compatibility changes independently and they should be added after document evaluation.
 
 ### Ingestion and Chunking
 
@@ -145,6 +159,35 @@ Flattened chunks receive document identity, source, hierarchy, page number when 
 The retrieval service queries Qdrant and the persisted BM25 index with the same query and optional metadata filters. Results are validated, deduplicated, ranked deterministically, and fused with weighted Reciprocal Rank Fusion. Dense retrieval failures are logged and fall back to sparse retrieval; results are then adjusted by the existing hierarchy heuristic and passed through vector-aware MMR. Cross-encoder reranking remains optional and runs after hybrid fusion.
 
 The BM25 index is stored at `data/index/bm25.json`, includes a schema version and corpus fingerprint, and is atomically replaced under a file lock. A corrupted or stale index is rejected and rebuilt by subsequent ingestion. Existing documents should be re-indexed once after enabling persistence.
+
+### Stage 1: Canonical Document and Page Manifest
+
+Stage 1 introduces an application-owned document boundary before semantic chunking:
+
+```text
+PDF -> PageScanner (PyMuPDF) -> DocumentManifest -> Canonicalizer -> EvidenceItem
+                                      |
+                                      +-> page text, signals, statistics, bbox, provenance
+```
+
+`PageScanner` is a bounded, cheap first pass for PDF, Markdown, and TXT. For PDFs it records page text, text blocks, block bounding boxes, dimensions, image counts, and initial scanned/image signals without running OCR or a visual model. For Markdown it creates logical section pages; TXT becomes one logical page. `Canonicalizer` converts these manifests into stable `EvidenceItem` records so downstream retrieval and agent tools do not depend directly on parser-specific objects.
+
+The canonical evidence contract supports text, tables, figures, charts, images, formulas, and captions. Stage 1 populates text evidence with page/section provenance; specialist table, layout, OCR, and visual adapters are intentionally deferred until Stage 2 routing identifies pages that need them. Manifests include a schema version and source hash and are atomically persisted and reused when the source is unchanged.
+
+### Stage 2: Cheap Page Scanning and Routing
+
+Stage 2 extends the first pass into a bounded routing layer:
+
+```text
+Document -> PageScanner -> PageManifest -> PageRoutingPolicy
+                                      |
+                                      +-> native text path for ordinary pages
+                                      +-> OCR/table/visual actions for flagged pages
+```
+
+The scanner now records PDF page count, rotation, dimensions, text blocks and bounding boxes, image counts, text density, numeric-token counts, heading/list signals, and conservative table/chart/formula signals. Markdown is represented as logical section pages and TXT as a logical page sequence. Manifests contain a schema version, scanner version, source SHA-256, timestamp, and are atomically persisted and reused when the source is unchanged.
+
+`PageRoutingPolicy` is deliberately separate from scanning. It records actions such as `use_native_text`, `parse_ocr`, `parse_table`, and `parse_visual`. Ordinary PDF pages use the cheap manifest-backed document path. Flagged pages are grouped into contiguous ranges and passed to Docling through `PdfPipelineOptions.page_range`; native pages and selectively parsed pages are combined before chunking. OCR, VLM, and specialist table implementations remain explicit routing actions until their dependencies are installed and registered.
 
 ## API Contract
 

@@ -1,4 +1,5 @@
 from backend.app.core.config import Settings
+from pathlib import Path
 from backend.app.services.rag_service import RagService
 
 _rag_service = None
@@ -7,7 +8,7 @@ _rag_service = None
 def get_rag_service():
     global _rag_service
     if _rag_service is None:
-        _rag_service = RagService()
+        _rag_service = RagService(storage_dir=Path("data"))
     return _rag_service
 
 

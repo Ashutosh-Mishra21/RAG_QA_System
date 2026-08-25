@@ -75,7 +75,6 @@ class WebApp:
             allow_headers=["*"],
         )
         self._register_middlewares()
-        lifespan = self.lifespan
         self._register_exception_handlers()
 
     # =========================================

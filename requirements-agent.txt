@@ -1,0 +1,4 @@
+# Optional constrained agent orchestration
+-r requirements-core.txt
+langgraph==0.2.60
+langchain-core==0.3.31

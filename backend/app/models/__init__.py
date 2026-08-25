@@ -16,6 +16,17 @@ from .document import (
 from .llm_provider import LLMRouter, OllamaLLM, OpenRouterLLM
 from .query import Query
 from .response import Response
+from .page_manifest import (
+    PageSignals,
+    PageStatistics,
+    PageSource,
+    PageManifest,
+    PageBlock,
+    PageRoutingDecision,
+    DocumentManifest,
+)
+from .evidence import EvidenceProvenance, EvidenceItem
+from .canonical_document import CanonicalDocument
 
 __all__ = [
     "Chunk",
@@ -35,4 +46,14 @@ __all__ = [
     "OpenRouterLLM",
     "Query",
     "Response",
+    "PageSignals",
+    "PageStatistics",
+    "PageSource",
+    "PageManifest",
+    "PageBlock",
+    "PageRoutingDecision",
+    "DocumentManifest",
+    "EvidenceProvenance",
+    "EvidenceItem",
+    "CanonicalDocument",
 ]

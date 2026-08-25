@@ -6,12 +6,12 @@ from backend.app.core.config import settings
 def test_rrf_rewards_chunks_present_in_both_rankings():
     retriever = HybridRetriever(None, None)
     dense = [
-        Chunk(id="dense-only", content="dense", metadata={}),
-        Chunk(id="both", content="both", metadata={}),
+        Chunk(id="dense-only", content="dense", metadata={}, score=0.9),
+        Chunk(id="both", content="both", metadata={}, score=0.8),
     ]
     keyword = [
-        Chunk(id="both", content="both", metadata={}),
-        Chunk(id="keyword-only", content="keyword", metadata={}),
+        Chunk(id="both", content="both", metadata={}, score=0.9),
+        Chunk(id="keyword-only", content="keyword", metadata={}, score=0.8),
     ]
 
     results = retriever._reciprocal_rank_fusion(dense, keyword)
@@ -50,6 +50,23 @@ def test_mmr_uses_embeddings_to_select_diverse_results():
     results = retriever._mmr(chunks, k=2, lambda_param=0.5)
 
     assert [chunk.id for chunk in results] == ["a", "c"]
+
+
+def test_rrf_and_mmr_break_ties_by_stable_chunk_id():
+    retriever = HybridRetriever(None, None)
+    left = Chunk(id="a", content="left", metadata={}, score=1.0, embedding=[1.0, 0.0])
+    right = Chunk(id="b", content="right", metadata={}, score=1.0, embedding=[0.0, 1.0])
+
+    fused = retriever._weighted_query_rrf(
+        dense_rankings=[(1.0, [left])],
+        keyword_rankings=[(1.0, [right])],
+        dense_weight=0.5,
+        keyword_weight=0.5,
+    )
+    mmr = retriever._mmr([right, left], k=2, lambda_param=0.5)
+
+    assert [chunk.id for chunk in fused] == ["a", "b"]
+    assert [chunk.id for chunk in mmr] == ["a", "b"]
 
 
 def test_hybrid_falls_back_to_sparse_when_dense_fails():

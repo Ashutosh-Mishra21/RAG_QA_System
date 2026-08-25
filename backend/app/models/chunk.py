@@ -10,6 +10,16 @@ class ChunkMetadata(BaseModel):
     document_id: str
     source_file: str
     document_type: str
+    evidence_id: Optional[str] = None
+    page_id: Optional[str] = None
+    bbox: Optional[List[float]] = None
+    evidence_type: Optional[str] = None
+    parser_name: Optional[str] = None
+    parser_version: Optional[str] = None
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    tenant_id: str = "default"
+    workspace_id: str = "default"
+    document_version: str = "1"
 
     title: Optional[str] = None
     section: Optional[str] = None
@@ -79,6 +89,16 @@ def flatten_metadata(meta: ChunkMetadata) -> Dict[str, Any]:
         "document_id": meta.document_id,
         "source_file": meta.source_file,
         "document_type": meta.document_type,
+        "evidence_id": meta.evidence_id,
+        "page_id": meta.page_id,
+        "bbox": meta.bbox,
+        "evidence_type": meta.evidence_type,
+        "parser_name": meta.parser_name,
+        "parser_version": meta.parser_version,
+        "confidence": meta.confidence,
+        "tenant_id": meta.tenant_id,
+        "workspace_id": meta.workspace_id,
+        "document_version": meta.document_version,
         "title": meta.title,
         "section": meta.section,
         "subsection": meta.subsection,

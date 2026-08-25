@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from backend.app.core.config import Settings
+from backend.app.core.config import settings
 from backend.app.indexing.cache_lock import atomic_json_replace, cache_lock
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -17,7 +17,7 @@ class Embedder:
     def __init__(
         self,
         model: SentenceTransformer | None = None,
-        model_name: str = Settings.EMBEDDING_MODEL,
+        model_name: str = settings.EMBEDDING_MODEL,
         batch_size: int = 32,
         cache_path: Path | None = None,
     ):

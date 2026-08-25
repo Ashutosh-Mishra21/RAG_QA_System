@@ -17,6 +17,8 @@ from backend.app.retrieval import (
     SemanticRetriever,
     QueryRewriter,
     QueryDecomposer,
+    EvidenceTools,
+    SearchHybridInput,
 )
 from backend.app.core.config import settings
 
@@ -41,6 +43,11 @@ class RagService:
         )
         # 🔥 inject rewriter
         self.retriever.query_rewriter = self.query_rewriter
+        self.evidence_tools = EvidenceTools(
+            self.retriever,
+            storage_dir=storage_dir,
+            page_parser=self._parse_targeted_evidence if self.ingestion_service else None,
+        )
 
         # 🔹 Generation Pipeline (core)
         self.pipeline = GenerationPipeline(
@@ -59,6 +66,18 @@ class RagService:
         if not self.ingestion_service:
             raise ValueError("IngestionService not initialized")
         return self.ingestion_service.ingest_and_index(file_path)
+
+    def _parse_targeted_evidence(self, request, action: str):
+        if not self.ingestion_service:
+            return []
+        return self.ingestion_service.refine_page(
+            document_id=request.document_id,
+            page_id=request.page_id,
+            page_number=request.page_number,
+            action=action,
+            tenant_id=request.tenant_id,
+            workspace_id=request.workspace_id,
+        )
 
     def _normalize_source(self, source: Any) -> dict:
         if hasattr(source, "model_dump"):
@@ -134,6 +153,9 @@ class RagService:
         query: str,
         metadata_filters=None,
         document_id: str | None = None,
+        tenant_id: str = "default",
+        workspace_id: str = "default",
+        document_version: str | None = None,
     ) -> dict:
         if not isinstance(query, str) or not query.strip():
             raise ValueError("Query must not be empty")
@@ -142,8 +164,12 @@ class RagService:
         filters = dict(metadata_filters or {})
         if document_id:
             filters["document_id"] = document_id
+        filters["tenant_id"] = tenant_id
+        filters["workspace_id"] = workspace_id
+        if document_version:
+            filters["document_version"] = document_version
 
-        cached = self.response_cache.get(query, document_id)
+        cached = self.response_cache.get(query, document_id, filters)
         if cached:
             logger.info("Response cache hit for query (document_id=%s)", document_id)
             return self._normalize_chat_result(cached)
@@ -162,74 +188,48 @@ class RagService:
         all_answers = []
         all_citations = []
         all_sources = []
+        all_confidences = []
 
         # 🔥 STEP 2: Solve each subquery
-        max_hops = 1  # 🔥 control explosion
-
         for sq in subqueries:
             rewritten_sq = self.query_rewriter.rewrite(sq) if is_complex else sq
-
-            result = self.pipeline.run(
-                query=rewritten_sq,
-                original_query=query,
-                metadata_filters=filters,
+            search = self.evidence_tools.search_hybrid(
+                SearchHybridInput(
+                    query=rewritten_sq,
+                    top_k=40,
+                    metadata_filters=filters,
+                )
             )
+            if search.sufficiency.sufficient:
+                result = self.pipeline.run(
+                    query=rewritten_sq,
+                    original_query=query,
+                    metadata_filters=filters,
+                    retrieved=search.chunks,
+                )
+            else:
+                result = {
+                    "answer": "I don't know based on the available evidence.",
+                    "citations": [],
+                    "confidence": search.sufficiency.score,
+                    "sources": [
+                        {
+                            "document_id": item.document_id,
+                            "page_id": item.page_id,
+                            "page_number": item.provenance.source_page,
+                            "evidence_id": item.evidence_id,
+                            "evidence_type": item.evidence_type,
+                        }
+                        for item in search.evidence[:5]
+                    ],
+                }
 
             result = self._normalize_chat_result(result)
 
             all_answers.append(result["answer"])
             all_citations.extend(result.get("citations", []))
             all_sources.extend(result.get("sources", []))
-
-            # Retry only when evidence is weak; avoid unconditional LLM/tool calls.
-            should_follow_up = (
-                is_complex
-                and result["confidence"] < 0.45
-                and bool(result.get("sources"))
-            )
-            for _ in range(max_hops if should_follow_up else 0):
-                followup_prompt = f"""
-                    Based on the answer below, generate a follow-up query to improve understanding.
-
-                    Rules:
-                    - Stay relevant to the original question
-                    - Do NOT introduce unrelated concepts
-                    - Keep it short
-
-                    Original Question:
-                    {query}
-
-                    Current Answer:
-                    {all_answers[-1]}
-
-                    Follow-up query:
-                """
-
-                try:
-                    followup_query, _, _ = self.pipeline.generator.llm_router.generate(
-                        followup_prompt
-                    )
-
-                    followup_query = followup_query.strip()
-
-                    # 🔥 safety check
-                    if len(followup_query.split()) < 3:
-                        break
-
-                    followup_result = self.pipeline.run(
-                        query=followup_query,
-                        original_query=query,
-                        metadata_filters=filters,
-                    )
-                    followup_result = self._normalize_chat_result(followup_result)
-
-                    all_answers.append(followup_result["answer"])
-                    all_citations.extend(followup_result.get("citations", []))
-                    all_sources.extend(followup_result.get("sources", []))
-
-                except Exception:
-                    logger.exception("Multi-hop follow-up failed for query: %s", query)
-                    break
+            all_confidences.append(result["confidence"])
 
         final_answer = (
             all_answers[0]
@@ -238,7 +238,7 @@ class RagService:
         )
         unique_sources = list(
             {
-                (s.get("document_id"), s.get("section")): s
+                (s.get("evidence_id"), s.get("document_id"), s.get("page_id")): s
                 for s in all_sources
                 if isinstance(s, dict)
             }.values()
@@ -247,11 +247,15 @@ class RagService:
             {
                 "answer": final_answer,
                 "citations": list(set(all_citations)),  # or extract later
-                "confidence": min(1.0, len(all_answers) / 3),
+                "confidence": (
+                    sum(all_confidences) / len(all_confidences)
+                    if all_confidences
+                    else 0.0
+                ),
                 "sources": unique_sources,
             }
         )
-        self.response_cache.set(query, result, document_id)
+        self.response_cache.set(query, result, document_id, filters)
         return result
 
     # =========================
