@@ -13,9 +13,6 @@ from .document import (
     ResearchArticleDocument,
     StudyDocument,
 )
-from .llm_provider import LLMRouter, OllamaLLM, OpenRouterLLM
-from .query import Query
-from .response import Response
 from .page_manifest import (
     PageSignals,
     PageStatistics,
@@ -27,6 +24,9 @@ from .page_manifest import (
 )
 from .evidence import EvidenceProvenance, EvidenceItem
 from .canonical_document import CanonicalDocument
+from .llm_provider import LLMRouter, OllamaLLM, OpenRouterLLM
+from .query import Query
+from .response import Response
 
 __all__ = [
     "Chunk",

@@ -45,9 +45,12 @@ flowchart LR
     ENRICH --> KW[Keyword Index]
 
     CH --> RAG[RagService]
-    RAG --> DECOMP[Query Decomposer]
-    RAG --> REWRITE[Query Rewriter]
-    REWRITE --> RET[Hybrid Retriever]
+    RAG --> AGENT[Bounded Agentic Query Runner]
+    AGENT --> DECOMP[Query Decomposer]
+    AGENT --> REWRITE[Query Rewriter]
+    AGENT --> RET[Hybrid Retriever]
+    AGENT --> EVAL[Evidence Sufficiency]
+    AGENT --> PAGE[Targeted Page/Table/Visual Parsing]
     DECOMP --> RET
     RET --> QD
     RET --> KW
@@ -75,6 +78,8 @@ flowchart LR
 - Batched BGE sentence encoding for semantic boundaries and deterministic UUID5 chunk IDs for repeatable re-indexing.
 - Cross-encoder reranking with `cross-encoder/ms-marco-MiniLM-L-6-v2`.
 - Query rewriting, query decomposition, and a controlled multi-hop follow-up step.
+- Bounded agentic query planning that selects retrieval, rewriting, decomposition,
+  evidence evaluation, and targeted page parsing before generation.
 - RAG generation pipeline with context building, prompt construction, model routing, validation, citations, confidence scores, and source metadata.
 - OpenRouter as the primary LLM provider with Ollama fallback support.
 - File-based LLM cache and response cache under `data/cache`.
@@ -112,12 +117,29 @@ flowchart LR
 | `backend/app/ingestion/` | Page scanning, canonicalization, Docling parser, structure builder, node chunker, enrichment, tree flattening |
 | `backend/app/indexing/` | Embedder, Qdrant vector store, schema manager, keyword index |
 | `backend/app/retrieval/` | Semantic retriever, BM25/keyword retriever, hybrid retriever, reranker, query analysis/rewrite/decomposition |
+| `backend/app/agent/` | Typed agent plan/decision models and bounded retrieval orchestration loop |
 | `backend/app/generation/` | Context builder, prompt builder, generator, citation manager, answer validator, generation pipeline |
 | `backend/evaluation/` | Retrieval metrics, generation metrics, full evaluation runner, datasets |
 | `backend/tests/` | Tests for ingestion, retrieval, generation, evaluation, full pipeline, and API contract |
 | `frontend/src/` | React app, pages, reusable UI components, API client, styles |
 | `data/raw/` | Uploaded source documents |
 | `data/cache/` | Runtime response and LLM caches |
+
+## Agentic Query Flow
+
+`RagService` delegates each uncached query to `AgenticQueryRunner`. The runner
+classifies the query, decomposes complex requests (up to
+`AGENT_MAX_SUBQUERIES`), searches the hybrid indexes, evaluates evidence
+sufficiency, and performs one bounded rewrite/retrieval retry
+(`AGENT_MAX_ATTEMPTS`). Table, figure, chart, and visual requests can trigger
+targeted page parsing when canonical page storage is available.
+
+Generation only receives evidence selected by the runner. If the retry budget
+is exhausted without sufficient provenance-backed evidence, the service returns
+a grounded “I don't know based on the available evidence” response with its
+confidence and source metadata. SQL and web-search tools are intentionally
+deferred; the runner's action boundary is designed to accept those adapters
+later without changing the API contract.
 | `docker-compose.yml` | Backend service for local containerized running |
 | `backend/Dockerfile` | Multi-stage Docker build for frontend + backend |
 
