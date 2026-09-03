@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     # 🔹 RETRIEVAL
     # =========================================
     DEFAULT_TOP_K: int = 5
+    AGENT_INITIAL_TOP_K: int = 10
+    AGENT_MAX_ATTEMPTS: int = 2
+    AGENT_MAX_SUBQUERIES: int = 3
 
     # =========================================
     # 🔹 LOGGING

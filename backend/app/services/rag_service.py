@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
+from backend.app.agent import AgenticQueryRunner
 from backend.app.core import ModelRegistry, ResponseCache
 from backend.app.services.ingestion_service import IngestionService
 
@@ -18,7 +19,6 @@ from backend.app.retrieval import (
     QueryRewriter,
     QueryDecomposer,
     EvidenceTools,
-    SearchHybridInput,
 )
 from backend.app.core.config import settings
 
@@ -47,6 +47,11 @@ class RagService:
             self.retriever,
             storage_dir=storage_dir,
             page_parser=self._parse_targeted_evidence if self.ingestion_service else None,
+        )
+        self.agent = AgenticQueryRunner(
+            evidence_tools=self.evidence_tools,
+            query_rewriter=self.query_rewriter,
+            query_decomposer=self.decomposer,
         )
 
         # 🔹 Generation Pipeline (core)
@@ -174,44 +179,35 @@ class RagService:
             logger.info("Response cache hit for query (document_id=%s)", document_id)
             return self._normalize_chat_result(cached)
 
-        # Keep simple questions cheap; reserve decomposition for multi-part queries.
-        words = query.split()
-        is_complex = len(words) > 12 or any(
-            marker in query.lower() for marker in (" and ", "compare", "versus", " vs ")
+        plan, decisions, searches = self.agent.run(query, filters)
+        logger.info(
+            "Agent query plan type=%s subqueries=%s decisions=%s",
+            plan.query_type,
+            len(plan.subqueries),
+            len(decisions),
         )
-        subqueries = self.decomposer.decompose(query) if is_complex else [query]
-
-        logger.info("Query decomposed into %s subquery/subqueries", len(subqueries))
-        for i, sq in enumerate(subqueries, start=1):
-            logger.info("Subquery %s: %s", i, sq)
 
         all_answers = []
         all_citations = []
         all_sources = []
         all_confidences = []
 
-        # 🔥 STEP 2: Solve each subquery
-        for sq in subqueries:
-            rewritten_sq = self.query_rewriter.rewrite(sq) if is_complex else sq
-            search = self.evidence_tools.search_hybrid(
-                SearchHybridInput(
-                    query=rewritten_sq,
-                    top_k=40,
-                    metadata_filters=filters,
-                )
-            )
-            if search.sufficiency.sufficient:
+        # Solve each planned subquery using the evidence selected by the agent.
+        for search in searches:
+            rewritten_sq = search["query"]
+            sufficiency = search["sufficiency"]
+            if sufficiency.sufficient:
                 result = self.pipeline.run(
                     query=rewritten_sq,
                     original_query=query,
                     metadata_filters=filters,
-                    retrieved=search.chunks,
+                    retrieved=search["chunks"],
                 )
             else:
                 result = {
                     "answer": "I don't know based on the available evidence.",
                     "citations": [],
-                    "confidence": search.sufficiency.score,
+                    "confidence": sufficiency.score,
                     "sources": [
                         {
                             "document_id": item.document_id,
@@ -220,7 +216,7 @@ class RagService:
                             "evidence_id": item.evidence_id,
                             "evidence_type": item.evidence_type,
                         }
-                        for item in search.evidence[:5]
+                        for item in search["evidence"][:5]
                     ],
                 }
 

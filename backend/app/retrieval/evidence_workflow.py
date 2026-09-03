@@ -6,7 +6,7 @@ from typing import Callable, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
-from backend.app.ingestion import EvidenceCache
+from backend.app.ingestion.evidence_cache import EvidenceCache
 from backend.app.models import Chunk, EvidenceItem, EvidenceProvenance
 
 
