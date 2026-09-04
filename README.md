@@ -5,11 +5,17 @@
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Cloud-DC244C)
-![Status](https://img.shields.io/badge/Status-Active_Development-orange)
+![Status](https://img.shields.io/badge/Status-Agentic_RAG_In_Development-orange)
 
-RAG QA System is a full-stack Retrieval-Augmented Generation application for asking questions over uploaded documents. It combines a FastAPI backend, a React + Vite frontend, Qdrant Cloud for vector search, hybrid retrieval, reranking, response validation, citations, and evaluation tooling.
+RAG QA System is a full-stack Agentic Retrieval-Augmented Generation application
+for asking grounded questions over uploaded documents. The system is evolving
+from a linear RAG pipeline into an evidence-first agent that decides how to
+retrieve, inspect, verify, and assemble context before generating an answer.
 
-The project is built as a practical learning and portfolio system: the current implementation focuses on a working document Q&A pipeline, while the roadmap tracks the production AI infrastructure concepts I plan to learn and add next.
+The current implementation provides the first backend slice of that design:
+structure-aware ingestion, hybrid vector and keyword retrieval, typed query
+planning, bounded retries, evidence sufficiency checks, targeted page parsing,
+grounded generation, citations, confidence, and source metadata.
 
 ## Live Deployment
 
@@ -62,6 +68,9 @@ flowchart LR
     PROMPT --> GEN[Generator]
     GEN --> LLM[OpenRouter Primary / Ollama Fallback]
     GEN --> VAL[Answer Validator + Citations]
+
+    AGENT --> CACHE[Shared file caches]
+    AGENT --> OBS[Decision and quality logs]
 ```
 
 ## Features
@@ -88,6 +97,74 @@ flowchart LR
 - Health checks for application status, LLM configuration, and Qdrant connectivity.
 - Evaluation utilities for retrieval and generation quality.
 - Dockerized backend image that builds the frontend and serves the SPA from FastAPI.
+
+## Agentic RAG Design
+
+The target architecture is organized into three query-time planes and two
+cross-cutting layers:
+
+### 1. Ingestion plane
+
+Before query time, uploaded documents pass through:
+
+```text
+source document
+  -> page scanning and high-level structural parsing
+  -> structure-aware chunking and metadata enrichment
+  -> shared embeddings
+  -> Qdrant vector store + persisted BM25 keyword index
+```
+
+The canonical evidence model preserves document, page, region, parser,
+confidence, and provenance metadata. Ordinary pages follow the inexpensive
+native-text path; pages flagged for tables or visuals can be parsed selectively.
+
+### 2. Agentic query plane
+
+At query time, `AgenticQueryRunner` acts as the retrieval/orchestration agent:
+
+1. Classifies the query and selects an initial retrieval strategy.
+2. Decomposes complex or multi-part questions into at most
+   `AGENT_MAX_SUBQUERIES` subqueries.
+3. Searches the hybrid vector and keyword indexes with tenant, workspace, and
+   document filters.
+4. Evaluates query-term coverage, evidence count, page diversity, and provenance.
+5. For weak evidence, performs a bounded query rewrite and retrieval retry.
+6. For table, figure, chart, or visual questions, can invoke targeted page
+   parsing when canonical page storage is available.
+7. Sends only selected evidence to reranking, context assembly, and generation.
+
+The loop is deliberately bounded by `AGENT_MAX_ATTEMPTS` and does not silently
+generate an ungrounded answer. If evidence remains insufficient, the API
+returns a grounded “I don't know based on the available evidence” response with
+confidence, reasons, and any valid sources gathered.
+
+### 3. Knowledge and tools
+
+Implemented tools:
+
+- Qdrant semantic/vector retrieval
+- Persisted BM25 keyword retrieval
+- Hybrid fusion, MMR, and optional cross-encoder reranking
+- Canonical page and region evidence lookup
+- Selective table and visual parsing hooks
+
+SQL retrieval, web search, OCR/VLM specialists, and domain-specific tools are
+planned extensions. The agent action boundary is designed so these capabilities
+can be registered later without changing the `/api/chat` contract.
+
+### Shared cache layer
+
+The current system uses separate file-backed caches for embeddings, LLM
+responses, chat responses, and selected page/region evidence. These reduce
+duplicate computation and cost while retaining deterministic local behavior.
+
+### Observability layer
+
+Current logging records retrieval and generation events, provider selection,
+cache hits, evidence sufficiency, and agent plan/decision counts. A future
+production layer will expose these as Prometheus metrics, Grafana dashboards,
+distributed traces, agent decision traces, and RAG quality signals.
 
 ## Tech Stack
 
@@ -124,22 +201,6 @@ flowchart LR
 | `frontend/src/` | React app, pages, reusable UI components, API client, styles |
 | `data/raw/` | Uploaded source documents |
 | `data/cache/` | Runtime response and LLM caches |
-
-## Agentic Query Flow
-
-`RagService` delegates each uncached query to `AgenticQueryRunner`. The runner
-classifies the query, decomposes complex requests (up to
-`AGENT_MAX_SUBQUERIES`), searches the hybrid indexes, evaluates evidence
-sufficiency, and performs one bounded rewrite/retrieval retry
-(`AGENT_MAX_ATTEMPTS`). Table, figure, chart, and visual requests can trigger
-targeted page parsing when canonical page storage is available.
-
-Generation only receives evidence selected by the runner. If the retry budget
-is exhausted without sufficient provenance-backed evidence, the service returns
-a grounded “I don't know based on the available evidence” response with its
-confidence and source metadata. SQL and web-search tools are intentionally
-deferred; the runner's action boundary is designed to accept those adapters
-later without changing the API contract.
 | `docker-compose.yml` | Backend service for local containerized running |
 | `backend/Dockerfile` | Multi-stage Docker build for frontend + backend |
 
@@ -346,6 +407,9 @@ QDRANT_API_KEY=
 QDRANT_COLLECTION=rag_documents
 
 DEFAULT_TOP_K=5
+AGENT_INITIAL_TOP_K=10
+AGENT_MAX_ATTEMPTS=2
+AGENT_MAX_SUBQUERIES=3
 LOG_LEVEL=INFO
 
 CHUNK_MAX_TOKENS=400
@@ -384,10 +448,10 @@ The Docker image:
 
 ## Evaluation and Tests
 
-Run the test suite:
+Run the test suite from the configured Conda environment:
 
-```bash
-pytest backend/tests
+```powershell
+conda run -n genai-env pytest backend/tests
 ```
 
 The evaluation layer includes:
@@ -402,11 +466,14 @@ Some tests and evaluation paths require Qdrant Cloud and an LLM provider to be c
 ## Current Limitations
 
 - `/api/chat` is currently non-streaming.
-- The keyword index is in-memory, so it is rebuilt during ingestion in the running process.
+- The keyword index is persisted as a versioned BM25 file and still requires
+ re-indexing when the embedding/indexing configuration changes.
 - Uploaded documents are stored on local/container disk, not object storage.
 - The evaluation API route is present, but the full evaluator is currently used from backend modules/scripts.
 - The app uses simple file-based caches for LLM and chat responses.
 - Authentication, rate limiting, and tenant/user isolation are not implemented yet.
+- SQL and web-search tools are not connected yet; current agent tools are local
+  vector, keyword, evidence, and targeted parsing capabilities.
 
 ## Future Work
 
@@ -414,17 +481,17 @@ Planned learning and implementation order:
 
 ### Immediately
 
-- Async Python
-- Redis
-- Celery
-- Streaming responses
+- Complete the agent tool registry and add SQL/web-search adapters.
+- Add structured Prometheus/Grafana metrics for agent decisions and RAG quality.
+- Add async execution for long-running retrieval and ingestion paths.
+- Add Redis/Celery for background ingestion and retrieval work.
+- Add streaming responses.
 
 ### Then
 
-- Prometheus
-- Grafana
 - LangSmith
 - OpenTelemetry
+- Durable conversation and agent decision history
 
 ### Next
 
@@ -449,6 +516,12 @@ Planned learning and implementation order:
 
 ## Production Roadmap
 
+- Complete the three-plane architecture: ingestion, agentic query
+  orchestration, and knowledge/tools.
+- Add a tool registry for vector DB, SQL, web search, selective parsers, APIs,
+  calculations, and domain-specific capabilities.
+- Add explicit evidence grading, confidence calibration, and re-plan policies
+  based on answer quality rather than retrieval count alone.
 - Add streaming chat responses for lower perceived latency.
 - Move long-running ingestion/indexing work to Celery workers backed by Redis.
 - Add durable object storage for uploaded source files.
@@ -460,3 +533,19 @@ Planned learning and implementation order:
 - Add distributed ingestion/retrieval workers and Ray Serve experiments.
 - Add GPU-focused optimization work with TensorRT, CUDA basics, and profiling.
 - Add Kafka for event-driven ingestion and pipeline coordination.
+
+## Current Validation
+
+The current agentic runner and retrieval regression tests pass in the
+`genai-env` Conda environment:
+
+```powershell
+conda run -n genai-env pytest -q `
+  backend/tests/test_agent_runner.py `
+  backend/tests/test_evidence_workflow.py `
+  backend/tests/test_retrieval_modes.py
+```
+
+The full API test suite also requires a configured LLM provider for tests that
+exercise the application dependency graph. Configure OpenRouter or Ollama
+before running the complete suite.
