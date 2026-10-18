@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+from langsmith import traceable, get_current_run_tree
 
 if TYPE_CHECKING:
     from backend.app.retrieval import EvidenceTools, QueryAnalyzer, QueryDecomposer
 
 from .models import AgentDecision, AgentPlan, AgentSearchOutcome
 from backend.app.models import Chunk
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,17 +30,16 @@ class AgenticQueryRunner:
         self.query_decomposer = query_decomposer
         self.query_analyzer = query_analyzer or QueryAnalyzer()
 
+    @traceable(name="agent.initial_plan", run_type="chain")
     def _initial_plan(self, query: str) -> AgentPlan:
         from backend.app.core.config import settings
-        from backend.app.retrieval import QueryAnalyzer
 
         strategy = self.query_analyzer.analyze(query)
         is_complex = len(query.split()) > 12 or any(
-            marker in query.casefold() for marker in (" and ", "compare", "versus", " vs ")
+            marker in query.casefold()
+            for marker in (" and ", "compare", "versus", " vs ")
         )
-        subqueries = (
-            self.query_decomposer.decompose(query) if is_complex else [query]
-        )
+        subqueries = self.query_decomposer.decompose(query) if is_complex else [query]
         actions = ["decompose" if is_complex else "search", "search"]
         if strategy.query_type in {"definition", "explanation"}:
             actions.append("rewrite")
@@ -49,6 +50,7 @@ class AgenticQueryRunner:
             actions=actions,
         )
 
+    @traceable(name="agent.search", run_type="retriever")
     def _search(
         self,
         query: str,
@@ -91,7 +93,11 @@ class AgenticQueryRunner:
             page_id = metadata.get("page_id")
             page_number = metadata.get("page_number")
             selector = (document_id, str(page_id or page_number))
-            if not document_id or selector in seen or (page_id is None and page_number is None):
+            if (
+                not document_id
+                or selector in seen
+                or (page_id is None and page_number is None)
+            ):
                 continue
             seen.add(selector)
             parsed.extend(
@@ -134,12 +140,23 @@ class AgenticQueryRunner:
             sufficiency=evidence_tools.verify_evidence(query, parsed),
         )
 
+    @traceable(name="agent.run", run_type="chain")
     def run(
         self, query: str, metadata_filters: dict[str, object]
     ) -> tuple[AgentPlan, list[AgentDecision], list[dict[str, Any]]]:
         from backend.app.core.config import settings
 
+        run_tree = get_current_run_tree()
+
         plan = self._initial_plan(query)
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "query_type": plan.query_type,
+                    "subquery_count": len(plan.subqueries),
+                    "max_attempts": settings.AGENT_MAX_ATTEMPTS,
+                }
+            )
         decisions: list[AgentDecision] = []
         results: list[dict[str, Any]] = []
 
@@ -174,7 +191,9 @@ class AgenticQueryRunner:
                 )
                 if outcome.sufficiency.sufficient:
                     break
-                parsed = self._parse_targeted(current_query, outcome, self.evidence_tools)
+                parsed = self._parse_targeted(
+                    current_query, outcome, self.evidence_tools
+                )
                 if parsed is not outcome:
                     outcome = parsed
                     decisions.append(

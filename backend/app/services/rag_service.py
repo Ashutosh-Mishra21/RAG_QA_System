@@ -1,5 +1,6 @@
 import logging
 from typing import Any, Dict, List
+from langsmith import traceable, get_current_run_tree
 
 from backend.app.agent import AgenticQueryRunner
 from backend.app.core import ModelRegistry, ResponseCache
@@ -46,7 +47,9 @@ class RagService:
         self.evidence_tools = EvidenceTools(
             self.retriever,
             storage_dir=storage_dir,
-            page_parser=self._parse_targeted_evidence if self.ingestion_service else None,
+            page_parser=(
+                self._parse_targeted_evidence if self.ingestion_service else None
+            ),
         )
         self.agent = AgenticQueryRunner(
             evidence_tools=self.evidence_tools,
@@ -114,6 +117,7 @@ class RagService:
 
         return {
             "answer": str(result.get("answer") or ""),
+            "context": str(result.get("context") or ""),
             "citations": [str(citation) for citation in citations],
             "confidence": min(1.0, max(0.0, confidence)),
             "sources": [
@@ -153,6 +157,7 @@ class RagService:
     # =========================
     # 🔹 QUERY → ANSWER (Phase 2)
     # =========================
+    @traceable(name="rag.answer", run_type="chain")
     def answer(
         self,
         query: str,
@@ -162,19 +167,48 @@ class RagService:
         workspace_id: str = "default",
         document_version: str | None = None,
     ) -> dict:
+        all_answers = []
+        all_citations = []
+        all_sources = []
+        all_confidences = []
+        all_contexts = []
+
+        run_tree = get_current_run_tree()
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "tenant_id": tenant_id,
+                    "workspace_id": workspace_id,
+                    "document_id": document_id,
+                    "document_version": document_version,
+                }
+            )
+
+            run_tree.tags.extend(
+                [
+                    "rag",
+                    "production",
+                ]
+            )
+
         if not isinstance(query, str) or not query.strip():
             raise ValueError("Query must not be empty")
+
         if len(query) > settings.RETRIEVAL_MAX_QUERY_CHARS:
             raise ValueError("Query exceeds the maximum supported length")
+
         filters = dict(metadata_filters or {})
+
         if document_id:
             filters["document_id"] = document_id
         filters["tenant_id"] = tenant_id
         filters["workspace_id"] = workspace_id
+
         if document_version:
             filters["document_version"] = document_version
 
         cached = self.response_cache.get(query, document_id, filters)
+
         if cached:
             logger.info("Response cache hit for query (document_id=%s)", document_id)
             return self._normalize_chat_result(cached)
@@ -187,11 +221,6 @@ class RagService:
             len(decisions),
         )
 
-        all_answers = []
-        all_citations = []
-        all_sources = []
-        all_confidences = []
-
         # Solve each planned subquery using the evidence selected by the agent.
         for search in searches:
             rewritten_sq = search["query"]
@@ -203,6 +232,9 @@ class RagService:
                     metadata_filters=filters,
                     retrieved=search["chunks"],
                 )
+
+                if result.get("context"):
+                    result["context"] = result["context"].strip()
             else:
                 result = {
                     "answer": "I don't know based on the available evidence.",
@@ -242,6 +274,7 @@ class RagService:
         result = self._normalize_chat_result(
             {
                 "answer": final_answer,
+                "context": "\n\n".join(all_contexts),
                 "citations": list(set(all_citations)),  # or extract later
                 "confidence": (
                     sum(all_confidences) / len(all_confidences)

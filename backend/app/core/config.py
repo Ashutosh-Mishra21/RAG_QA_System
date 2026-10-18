@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
 
     # =========================================
+    # 🔹 LANGSMITH
+    # =========================================
+    LANGSMITH_TRACING: bool = False
+    LANGSMITH_API_KEY: Optional[str] = None
+    LANGSMITH_PROJECT: str = "evidence-first-rag-dev"
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGSMITH_CAPTURE_CONTENT: bool = False
+
+    # =========================================
     # 🔹 LLM
     # =========================================
     OPENROUTER_API_KEY: Optional[str] = None

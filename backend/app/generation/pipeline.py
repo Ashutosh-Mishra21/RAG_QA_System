@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, Any, Optional
+from langsmith import get_current_run_tree, traceable
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ class GenerationPipeline:
         self.generator = generator
         self.validator = validator
 
+    @traceable(name="generation.run", run_type="chain")
     def run(
         self,
         query: str,
@@ -22,6 +24,15 @@ class GenerationPipeline:
         metadata_filters=None,
         retrieved=None,
     ) -> Dict[str, Any]:
+
+        run_tree = get_current_run_tree()
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "retrieved_count": len(retrieved),
+                    "top_chunks_count": len(top_chunks),
+                }
+            )
         if retrieved is None:
             retrieved = self.retriever.retrieve(
                 query=query,
@@ -85,6 +96,14 @@ class GenerationPipeline:
                 "fallback_triggered": fallback_triggered,
             }
 
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "provider": provider,
+                    "model": used_model,
+                    "fallback_triggered": fallback_triggered,
+                }
+            )
         return {
             "answer": answer,
             "context": context,
