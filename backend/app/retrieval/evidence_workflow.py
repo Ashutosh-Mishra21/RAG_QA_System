@@ -246,11 +246,21 @@ class EvidenceTools:
         )
 
     def search_hybrid(self, request: SearchHybridInput) -> EvidenceSearchResult:
-        chunks = self.retriever.retrieve(
-            request.query,
-            top_k=request.top_k,
-            metadata_filters=request.metadata_filters,
-        )
+        # Planned agent targets should be searched as-is. HybridRetriever's
+        # standalone retrieve() still supports optional multi-query expansion.
+        retrieve_target = getattr(self.retriever, "retrieve_target", None)
+        if callable(retrieve_target):
+            chunks = retrieve_target(
+                request.query,
+                top_k=request.top_k,
+                metadata_filters=request.metadata_filters,
+            )
+        else:
+            chunks = self.retriever.retrieve(
+                request.query,
+                top_k=request.top_k,
+                metadata_filters=request.metadata_filters,
+            )
         evidence = [self.evidence_from_chunk(chunk) for chunk in chunks]
         return EvidenceSearchResult(
             evidence=evidence,
