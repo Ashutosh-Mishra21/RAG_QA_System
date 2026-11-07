@@ -14,3 +14,11 @@ def get_rag_service():
 
 def get_settings() -> Settings:
     return Settings()
+
+
+def reset_rag_service() -> None:
+    """Release request-serving resources before the app lifespan ends."""
+    global _rag_service
+    service, _rag_service = _rag_service, None
+    if service is not None:
+        service.close()
