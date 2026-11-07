@@ -24,7 +24,7 @@ class FakeTools:
 
     def search_hybrid(self, request):
         self.calls.append(request)
-        sufficient = len(self.calls) > 1
+        sufficient = request.query.startswith("rewritten:")
         evidence = [self.evidence_from_chunk(_chunk())]
         return EvidenceSearchResult(
             chunks=[_chunk()],
