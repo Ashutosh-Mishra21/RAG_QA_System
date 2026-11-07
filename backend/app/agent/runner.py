@@ -307,7 +307,8 @@ class AgenticQueryRunner:
                             "Follow-up query rewrite failed; using targeted gap query",
                             exc_info=True,
                         )
-                current_query = str(rewritten_query).strip() if rewritten_query else focused_query
+                rewritten_text = str(rewritten_query).strip() if rewritten_query else ""
+                current_query = rewritten_text or focused_query
                 decisions.append(
                     AgentDecision(
                         action="rewrite",
