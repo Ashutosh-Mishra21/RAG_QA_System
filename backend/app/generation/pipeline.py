@@ -7,7 +7,8 @@ logger = logging.getLogger(__name__)
 
 class GenerationPipeline:
     def __init__(
-        self, retriever, reranker, context_builder, prompt_builder, generator, validator
+        self, retriever, reranker, context_builder, prompt_builder, generator, validator,
+        sufficiency_checker=None,
     ):
         self.retriever = retriever
         self.reranker = reranker
@@ -15,6 +16,43 @@ class GenerationPipeline:
         self.prompt_builder = prompt_builder
         self.generator = generator
         self.validator = validator
+        self.sufficiency_checker = sufficiency_checker
+
+    def _assess_final_context(self, query, chunks, run_tree):
+        if self.sufficiency_checker is None:
+            return None
+        assessment = self.sufficiency_checker(query, chunks)
+        reasons = list(getattr(assessment, "reasons", []) or [])
+        score = float(getattr(assessment, "score", 0.0) or 0.0)
+        sufficient = bool(getattr(assessment, "sufficient", False))
+        logger.info(
+            "[PIPELINE] Final context sufficiency sufficient=%s score=%.4f reasons=%s",
+            sufficient,
+            score,
+            reasons,
+        )
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "final_context_sufficient": sufficient,
+                    "final_context_sufficiency_score": score,
+                    "final_context_sufficiency_reasons": reasons,
+                }
+            )
+        return assessment
+
+    @staticmethod
+    def _insufficient_context_result(context, top_chunks, assessment):
+        reasons = list(getattr(assessment, "reasons", []) or [])
+        reason = "; ".join(reasons) or "selected context did not meet the sufficiency threshold"
+        return {
+            "answer": "I don't know based on the available evidence.",
+            "context": context,
+            "citations": [],
+            "confidence": 0.0,
+            "sources": [chunk.metadata for chunk in top_chunks],
+            "reason": "final context insufficient: " + reason,
+        }
 
     @traceable(name="generation.run", run_type="chain")
     def run(
@@ -48,6 +86,11 @@ class GenerationPipeline:
             )
 
         context, citation_map = self.context_builder.build(top_chunks)
+        context_assessment = self._assess_final_context(query, top_chunks, run_tree)
+        if context_assessment is not None and not context_assessment.sufficient:
+            return self._insufficient_context_result(
+                context, top_chunks, context_assessment
+            )
 
         llm = self.generator.llm_router
         logger.info("[PIPELINE] llm.primary is None: %s", llm.primary is None)
@@ -147,6 +190,15 @@ class GenerationPipeline:
             )
 
         context, citation_map = self.context_builder.build(top_chunks)
+        context_assessment = self._assess_final_context(query, top_chunks, run_tree)
+        if context_assessment is not None and not context_assessment.sufficient:
+            rejected = self._insufficient_context_result(
+                context, top_chunks, context_assessment
+            )
+            yield {"event": "chunk", "data": {"text": rejected["answer"]}}
+            yield {"event": "final", "data": rejected}
+            return
+
         llm_router = self.generator.llm_router
         expected_provider = "api" if llm_router.primary else "local"
         prompt = self.prompt_builder.build_prompt(query, context, expected_provider)
