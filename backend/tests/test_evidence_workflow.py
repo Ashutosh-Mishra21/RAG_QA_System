@@ -168,6 +168,7 @@ def test_sufficiency_gate_rejects_empty_or_weak_evidence():
     assert "no retrievable evidence" in empty.reasons
     assert weak.sufficient is False
     assert "weak query-term coverage" in weak.reasons
+    assert any(reason.startswith("missing query terms:") for reason in weak.reasons)
 
 
 def test_targeted_parse_tools_invoke_the_bound_page_action():
