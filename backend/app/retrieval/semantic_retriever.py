@@ -16,12 +16,14 @@ class SemanticRetriever:
         collection_name: str = settings.QDRANT_COLLECTION,
         top_k: int = 5,
         embedder: Optional[Embedder] = None,
+        client=None,
     ):
         self.collection_name = collection_name
         self.top_k = top_k
-        self.client = QdrantClient(
+        self.client = client or QdrantClient(
             url=settings.QDRANT_URL,
             api_key=settings.QDRANT_API_KEY,
+            pool_size=max(1, settings.QDRANT_POOL_SIZE),
         )
         self.embedder = embedder or Embedder()
 
