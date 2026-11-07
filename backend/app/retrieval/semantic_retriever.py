@@ -1,9 +1,13 @@
+import logging
+import time
 from typing import List, Optional, Dict, Any
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from backend.app.core.config import settings
 from backend.app.indexing import Embedder
 from backend.app.models import Chunk, ChunkMetadata
+
+logger = logging.getLogger(__name__)
 
 
 class DenseRetrievalError(RuntimeError):
@@ -48,14 +52,22 @@ class SemanticRetriever:
         top_k: Optional[int] = None,
     ) -> List[Chunk]:
         top_k = min(max(1, top_k or self.top_k), settings.RETRIEVAL_MAX_TOP_K)
+        embedding_started = time.perf_counter()
         try:
             query_vector = self.embedder.embed_query(query)
         except Exception as exc:
+            logger.exception("Dense query embedding failed")
             raise DenseRetrievalError("Dense query embedding failed") from exc
+        logger.info(
+            "Dense query embedding completed duration_ms=%.1f query_chars=%s",
+            (time.perf_counter() - embedding_started) * 1000,
+            len(query),
+        )
         if not query_vector:
             raise DenseRetrievalError("Dense query embedding returned no vector")
         search_filter = self.build_filter(metadata_filters)
 
+        retrieval_started = time.perf_counter()
         try:
             results = self.client.query_points(
                 collection_name=self.collection_name,
@@ -66,7 +78,13 @@ class SemanticRetriever:
                 with_vectors=True,
             ).points
         except Exception as exc:
+            logger.exception("Dense vector retrieval failed")
             raise DenseRetrievalError("Dense vector retrieval failed") from exc
+        logger.info(
+            "Dense vector search completed duration_ms=%.1f result_count=%s",
+            (time.perf_counter() - retrieval_started) * 1000,
+            len(results),
+        )
 
         chunks: List[Chunk] = []
         for hit in results:
