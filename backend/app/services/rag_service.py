@@ -213,6 +213,7 @@ class RagService:
             yield {"event": "final", "data": self._stream_final_data(result)}
             return
 
+        logger.info("Response cache miss for streaming query (document_id=%s)", document_id)
         plan, decisions, searches = self.agent.run(query, filters)
         logger.info(
             "Streaming agent query plan type=%s subqueries=%s decisions=%s",
