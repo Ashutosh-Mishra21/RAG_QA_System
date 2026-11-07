@@ -15,6 +15,7 @@ from backend.app.api.routes import chat, evaluation, health, upload
 from backend.app.api.responses import error_response
 from backend.app.core.logging import configure_logging
 from backend.app.core.config import settings
+from backend.app.core.model_registry import ModelRegistry
 
 configure_logging()
 
@@ -110,9 +111,14 @@ class WebApp:
 
         logger.info("Startup validation complete")
 
-        yield
-
-        logger.info("Shutting down Enterprise RAG QA System")
+        try:
+            yield
+        finally:
+            logger.info("Shutting down Enterprise RAG QA System")
+            try:
+                ModelRegistry.instance().close()
+            except Exception:
+                logger.exception("Failed to close shared Qdrant client")
 
     # def _register_events(self):
 
