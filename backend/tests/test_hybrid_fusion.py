@@ -172,6 +172,35 @@ def test_dense_and_bm25_first_pass_run_concurrently(monkeypatch):
     assert {chunk.id for chunk in results} == {"dense", "bm25"}
 
 
+def test_planned_target_skips_additional_query_expansion():
+    class UnexpectedRewriter:
+        def generate_multi_queries(self, query):
+            raise AssertionError("planned targets must not trigger nested expansions")
+
+    class Backend:
+        def __init__(self, chunk_id):
+            self.chunk_id = chunk_id
+
+        def retrieve(self, query, top_k=5, metadata_filters=None):
+            return [
+                Chunk(
+                    id=self.chunk_id,
+                    content=f"target evidence {self.chunk_id}",
+                    metadata={},
+                    score=1.0,
+                )
+            ]
+
+    retriever = HybridRetriever(
+        Backend("dense"),
+        Backend("bm25"),
+        query_rewriter=UnexpectedRewriter(),
+    )
+    results = retriever.retrieve_target("planned target", top_k=2)
+
+    assert {chunk.id for chunk in results} == {"dense", "bm25"}
+
+
 def test_hybrid_falls_back_to_sparse_when_dense_fails():
     class BrokenDense:
         def retrieve(self, *args, **kwargs):
