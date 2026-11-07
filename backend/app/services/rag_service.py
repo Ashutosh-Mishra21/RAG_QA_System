@@ -37,7 +37,10 @@ class RagService:
         self.query_rewriter = QueryRewriter(registry.get_llm_router())
         self.decomposer = QueryDecomposer(registry.get_llm_router())
         self.retriever = HybridRetriever(
-            dense_retriever=SemanticRetriever(embedder=registry.get_embedder()),
+            dense_retriever=SemanticRetriever(
+                embedder=registry.get_embedder(),
+                client=registry.get_qdrant_client(),
+            ),
             keyword_index=registry.get_keyword_index(),
             query_rewriter=self.query_rewriter,
             embedder=registry.get_embedder(),
@@ -306,6 +309,7 @@ class RagService:
         if cached:
             logger.info("Response cache hit for query (document_id=%s)", document_id)
             return self._normalize_chat_result(cached)
+        logger.info("Response cache miss for query (document_id=%s)", document_id)
 
         plan, decisions, searches = self.agent.run(query, filters)
         logger.info(
