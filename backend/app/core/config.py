@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     AGENT_INITIAL_TOP_K: int = 12
     AGENT_MAX_ATTEMPTS: int = 2
     AGENT_MAX_SUBQUERIES: int = 3
+    # Bounded thread-pool concurrency for independent dense/BM25 first-pass calls.
+    RETRIEVAL_MAX_CONCURRENCY: int = 4
+    RETRIEVAL_TASK_TIMEOUT_SECONDS: float = 8.0
+    QDRANT_POOL_SIZE: int = 8
 
     # =========================================
     # 🔹 LOGGING
