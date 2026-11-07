@@ -24,6 +24,7 @@ class SemanticRetriever:
             url=settings.QDRANT_URL,
             api_key=settings.QDRANT_API_KEY,
             pool_size=max(1, settings.QDRANT_POOL_SIZE),
+            timeout=max(1, settings.QDRANT_REQUEST_TIMEOUT_SECONDS),
         )
         self.embedder = embedder or Embedder()
 
