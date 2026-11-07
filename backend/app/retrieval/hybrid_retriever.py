@@ -240,12 +240,27 @@ class HybridRetriever:
             unique_content.setdefault(content_key, chunk)
         return list(unique_content.values())
 
+    def retrieve_target(
+        self,
+        query: str,
+        top_k: int = 5,
+        metadata_filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Chunk]:
+        """Retrieve one planned query without spawning additional rewrites."""
+        return self.retrieve(
+            query=query,
+            top_k=top_k,
+            metadata_filters=metadata_filters,
+            expand_queries=False,
+        )
+
     def retrieve(
         self,
         query: str,
         top_k: int = 5,
         metadata_filters: Optional[Dict[str, Any]] = None,
         original_query: Optional[str] = None,
+        expand_queries: bool = True,
     ) -> List[Chunk]:
         if not isinstance(query, str) or not query.strip():
             return []
@@ -268,7 +283,7 @@ class HybridRetriever:
 
         queries.append(query)  # rewritten
 
-        if self.query_rewriter:
+        if expand_queries and self.query_rewriter:
             multi_queries = self.query_rewriter.generate_multi_queries(
                 original_query or query
             )
