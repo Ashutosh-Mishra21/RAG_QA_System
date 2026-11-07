@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict, Any, Optional
 from langsmith import get_current_run_tree, traceable
 
@@ -64,6 +65,7 @@ class GenerationPipeline:
     ) -> Dict[str, Any]:
 
         run_tree = get_current_run_tree()
+        retrieval_started = time.perf_counter()
         if retrieved is None:
             retrieved = self.retriever.retrieve(
                 query=query,
@@ -71,11 +73,20 @@ class GenerationPipeline:
                 top_k=40,
                 metadata_filters=metadata_filters or {},
             )
-        logger.info("[PIPELINE] Retrieved chunks: %s", len(retrieved))
+        logger.info(
+            "[PIPELINE] Retrieved chunks: %s (stage_ms=%.1f)",
+            len(retrieved),
+            (time.perf_counter() - retrieval_started) * 1000,
+        )
 
-        reranked = self.reranker.rerank(query, retrieved)  # ✅ first define
-
-        top_chunks = reranked[:5]  # ✅ then use it
+        rerank_started = time.perf_counter()
+        reranked = self.reranker.rerank(query, retrieved)
+        top_chunks = reranked[:5]
+        logger.info(
+            "[PIPELINE] Reranking completed stage_ms=%.1f top_chunks=%s",
+            (time.perf_counter() - rerank_started) * 1000,
+            len(top_chunks),
+        )
         logger.info("[PIPELINE] Top chunks after rerank: %s", len(top_chunks))
         if run_tree:
             run_tree.metadata.update(
@@ -85,7 +96,13 @@ class GenerationPipeline:
                 }
             )
 
+        context_started = time.perf_counter()
         context, citation_map = self.context_builder.build(top_chunks)
+        logger.info(
+            "[PIPELINE] Context assembly completed stage_ms=%.1f context_chars=%s",
+            (time.perf_counter() - context_started) * 1000,
+            len(context),
+        )
         context_assessment = self._assess_final_context(query, top_chunks, run_tree)
         if context_assessment is not None and not context_assessment.sufficient:
             return self._insufficient_context_result(
@@ -101,6 +118,7 @@ class GenerationPipeline:
             query, context, expected_provider
         )
 
+        generation_started = time.perf_counter()
         answer, used_model, provider = self.generator.generate(initial_prompt)
         logger.info("[PIPELINE] Provider used for initial generation: %s", provider)
 
@@ -126,6 +144,11 @@ class GenerationPipeline:
                 "[PIPELINE] Skipping prompt adaptation rerun after API fallback to avoid duplicate provider attempts"
             )
 
+        logger.info(
+            "[PIPELINE] Generation completed stage_ms=%.1f provider=%s",
+            (time.perf_counter() - generation_started) * 1000,
+            provider,
+        )
         validation = self.validator.validate(answer, citation_map, top_chunks)
         if validation["confidence"] < 0.2 and len(answer.split()) < 5:
             return {
@@ -168,6 +191,7 @@ class GenerationPipeline:
     ):
         """Stream generated text, then yield the validated final result."""
         run_tree = get_current_run_tree()
+        retrieval_started = time.perf_counter()
         if retrieved is None:
             retrieved = self.retriever.retrieve(
                 query=query,
@@ -175,11 +199,20 @@ class GenerationPipeline:
                 top_k=40,
                 metadata_filters=metadata_filters or {},
             )
-        logger.info("[PIPELINE] Retrieved chunks for stream: %s", len(retrieved))
+        logger.info(
+            "[PIPELINE] Retrieved chunks for stream: %s (stage_ms=%.1f)",
+            len(retrieved),
+            (time.perf_counter() - retrieval_started) * 1000,
+        )
 
+        rerank_started = time.perf_counter()
         reranked = self.reranker.rerank(query, retrieved)
         top_chunks = reranked[:5]
-        logger.info("[PIPELINE] Top chunks after rerank: %s", len(top_chunks))
+        logger.info(
+            "[PIPELINE] Stream reranking completed stage_ms=%.1f top_chunks=%s",
+            (time.perf_counter() - rerank_started) * 1000,
+            len(top_chunks),
+        )
         if run_tree:
             run_tree.metadata.update(
                 {
@@ -189,7 +222,13 @@ class GenerationPipeline:
                 }
             )
 
+        context_started = time.perf_counter()
         context, citation_map = self.context_builder.build(top_chunks)
+        logger.info(
+            "[PIPELINE] Stream context assembly completed stage_ms=%.1f context_chars=%s",
+            (time.perf_counter() - context_started) * 1000,
+            len(context),
+        )
         context_assessment = self._assess_final_context(query, top_chunks, run_tree)
         if context_assessment is not None and not context_assessment.sufficient:
             rejected = self._insufficient_context_result(
@@ -203,6 +242,7 @@ class GenerationPipeline:
         expected_provider = "api" if llm_router.primary else "local"
         prompt = self.prompt_builder.build_prompt(query, context, expected_provider)
 
+        generation_started = time.perf_counter()
         answer_parts = []
         used_model = None
         provider = None
@@ -211,6 +251,11 @@ class GenerationPipeline:
             yield {"event": "chunk", "data": {"text": text}}
 
         answer = "".join(answer_parts)
+        logger.info(
+            "[PIPELINE] Stream generation completed stage_ms=%.1f provider=%s",
+            (time.perf_counter() - generation_started) * 1000,
+            provider,
+        )
         validation = self.validator.validate(answer, citation_map, top_chunks)
         fallback_triggered = expected_provider == "api" and provider == "local"
 
