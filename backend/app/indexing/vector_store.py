@@ -17,11 +17,13 @@ class VectorStore:
     def __init__(
         self,
         collection_name: str = settings.QDRANT_COLLECTION,
+        client=None,
     ):
         self.collection_name = collection_name
-        self.client = QdrantClient(
+        self.client = client or QdrantClient(
             url=settings.QDRANT_URL,
             api_key=settings.QDRANT_API_KEY,
+            pool_size=max(1, settings.QDRANT_POOL_SIZE),
         )
 
     def _ensure_collection(
