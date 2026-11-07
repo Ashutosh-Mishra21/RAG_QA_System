@@ -116,6 +116,12 @@ class WebApp:
         finally:
             logger.info("Shutting down Enterprise RAG QA System")
             try:
+                from backend.app.api.dependencies import reset_rag_service
+
+                reset_rag_service()
+            except Exception:
+                logger.exception("Failed to stop the RAG service")
+            try:
                 ModelRegistry.instance().close()
             except Exception:
                 logger.exception("Failed to close shared Qdrant client")
