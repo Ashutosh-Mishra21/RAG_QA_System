@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[3]
-RESPONSE_CACHE_VERSION = "rag-answer-v2"
+RESPONSE_CACHE_VERSION = "rag-answer-v3"
 
 
 class ResponseCache:
