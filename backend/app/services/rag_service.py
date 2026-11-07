@@ -68,7 +68,17 @@ class RagService:
             prompt_builder=PromptBuilder(),
             generator=Generator(registry.get_llm_router()),
             validator=AnswerValidator(),
+            sufficiency_checker=self._score_final_context,
         )
+
+    def _score_final_context(self, query: str, chunks) :
+        """Evaluate the selected, reranked evidence against the original question."""
+        evidence = [
+            self.evidence_tools.evidence_from_chunk(chunk)
+            for chunk in chunks
+            if getattr(chunk, "content", "").strip()
+        ]
+        return self.evidence_tools.verify_evidence(query, evidence)
 
     # =========================
     # 🔹 INGESTION (Phase 1)
