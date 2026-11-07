@@ -298,12 +298,16 @@ class AgenticQueryRunner:
                     if missing
                     else current_query
                 )
-                rewritten_query = (
-                    self.query_rewriter.rewrite(focused_query)
-                    if self.query_rewriter is not None
-                    else focused_query
-                )
-                current_query = str(rewritten_query).strip() or focused_query
+                rewritten_query = focused_query
+                if self.query_rewriter is not None:
+                    try:
+                        rewritten_query = self.query_rewriter.rewrite(focused_query)
+                    except Exception:
+                        logger.warning(
+                            "Follow-up query rewrite failed; using targeted gap query",
+                            exc_info=True,
+                        )
+                current_query = str(rewritten_query).strip() if rewritten_query else focused_query
                 decisions.append(
                     AgentDecision(
                         action="rewrite",
@@ -351,6 +355,17 @@ class AgenticQueryRunner:
             )
 
         total_duration_ms = (time.perf_counter() - run_started) * 1000
+        for decision in decisions:
+            logger.info(
+                "Agent decision action=%s query=%r attempt=%s reason=%s "
+                "result_count=%s sufficient=%s",
+                decision.action,
+                decision.query,
+                decision.attempt,
+                decision.reason,
+                decision.result_count,
+                decision.sufficient,
+            )
         logger.info(
             "Agent plan completed query_type=%s targets=%s searches=%s follow_ups=%s "
             "task_budget=%s concurrency=%s planning_ms=%.1f duration_ms=%.1f",
