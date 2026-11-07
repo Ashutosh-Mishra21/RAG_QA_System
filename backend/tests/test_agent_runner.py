@@ -35,6 +35,7 @@ class FakeTools:
                 evidence_count=1,
                 covered_query_terms=1,
                 query_terms=1,
+                reasons=[] if sufficient else ["missing query terms: retrieval evidence"],
             ),
         )
 
@@ -60,6 +61,22 @@ class FakeRewriter:
 class FakeDecomposer:
     def decompose(self, query):
         return [query]
+
+
+def test_agent_plan_always_keeps_original_question_with_decomposition():
+    class MultiQueryDecomposer:
+        def decompose(self, query):
+            return ["component A", "component B", query, "component A"]
+
+    tools = FakeTools()
+    runner = AgenticQueryRunner(tools, FakeRewriter(), MultiQueryDecomposer())
+    query = "Compare component A and component B across their main characteristics"
+
+    plan, _, _ = runner.run(query, {})
+
+    assert plan.subqueries[0] == query
+    assert plan.subqueries[1:] == ["component A", "component B"]
+    assert len(tools.calls) <= 8
 
 
 def test_agent_retries_once_and_returns_final_evidence():
