@@ -71,7 +71,7 @@ class RagService:
             sufficiency_checker=self._score_final_context,
         )
 
-    def _score_final_context(self, query: str, chunks) :
+    def _score_final_context(self, query: str, chunks):
         """Evaluate the selected, reranked evidence against the original question."""
         evidence = [
             self.evidence_tools.evidence_from_chunk(chunk)
@@ -79,6 +79,12 @@ class RagService:
             if getattr(chunk, "content", "").strip()
         ]
         return self.evidence_tools.verify_evidence(query, evidence)
+
+    def close(self) -> None:
+        """Stop the retriever's bounded worker pool during application shutdown."""
+        executor = getattr(self.retriever, "_retrieval_executor", None)
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=True)
 
     # =========================
     # 🔹 INGESTION (Phase 1)
