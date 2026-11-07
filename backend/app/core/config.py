@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     RETRIEVAL_MAX_CONCURRENCY: int = 4
     RETRIEVAL_TASK_TIMEOUT_SECONDS: float = 8.0
     QDRANT_POOL_SIZE: int = 8
-    QDRANT_REQUEST_TIMEOUT_SECONDS: int = 10
+    QDRANT_REQUEST_TIMEOUT_SECONDS: int = 7
 
     # =========================================
     # 🔹 LOGGING
