@@ -436,8 +436,14 @@ class HybridRetriever:
         if self.embedder is not None:
             missing = [chunk for chunk in candidates if chunk.embedding is None]
             if missing:
+                embedding_started = time.perf_counter()
                 vectors = self.embedder.embed_documents(
                     [chunk.content for chunk in missing]
+                )
+                logger.info(
+                    "Retrieved-chunk embedding completed duration_ms=%.1f batch_size=%s",
+                    (time.perf_counter() - embedding_started) * 1000,
+                    len(missing),
                 )
                 for chunk, vector in zip(missing, vectors):
                     chunk.embedding = vector
