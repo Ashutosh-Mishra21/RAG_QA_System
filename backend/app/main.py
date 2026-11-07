@@ -1,12 +1,7 @@
 from pathlib import Path
-from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import logging
 import time
-
-# Load environment variables from repo root .env
-ROOT = Path(__file__).resolve().parents[2]
-load_dotenv(ROOT / ".env")
 
 from fastapi import FastAPI
 from fastapi import HTTPException
@@ -108,10 +103,10 @@ class WebApp:
 
         logger.info("Starting Enterprise RAG QA System")
 
-        if settings.OPENROUTER_API_KEY:
-            logger.info("OpenRouter configured")
+        if settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY:
+            logger.info("Google AI Studio Gemini configured (%s)", settings.GEMINI_MODEL)
         else:
-            logger.warning("OPENROUTER_API_KEY missing")
+            logger.warning("Gemini API key missing; Ollama may be used as the primary provider")
 
         logger.info("Startup validation complete")
 
@@ -126,10 +121,10 @@ class WebApp:
 
     #         logger.info("Starting Enterprise RAG QA System")
 
-    #         if settings.OPENROUTER_API_KEY:
-    #             logger.info("OpenRouter configured")
+    #         if settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY:
+    #             logger.info("Google AI Studio Gemini configured")
     #         else:
-    #             logger.warning("OPENROUTER_API_KEY missing")
+    #             logger.warning("Gemini API key missing; Ollama may be used")
 
     #         logger.info("Startup validation complete")
 

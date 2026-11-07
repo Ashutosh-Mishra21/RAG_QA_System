@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from backend.app.ingestion.canonicalizer import Canonicalizer
 from backend.app.ingestion.docling_parser import DoclingParser
 from backend.app.models import CanonicalDocument, DocumentManifest
+
+logger = logging.getLogger(__name__)
 
 
 class PageActionExecutor:
@@ -33,6 +36,11 @@ class PageActionExecutor:
         if path.suffix.lower() != ".pdf" or not page_numbers:
             return canonical
 
+        logger.info(
+            "Running selective Docling parse: document_id=%s pages=%s",
+            canonical.document_id,
+            sorted(page_numbers),
+        )
         parsed = self.parser.parse_pages(path, page_numbers)
         replacement = self.canonicalizer.from_docling(
             parsed,
@@ -52,11 +60,21 @@ class PageActionExecutor:
             if any(item.page_id == page_id for item in replacement.evidence)
         }
         if not replacement_by_page:
+            logger.info(
+                "Selective Docling parse produced no replacement evidence: document_id=%s",
+                canonical.document_id,
+            )
             return canonical
         evidence = [
             item for item in canonical.evidence if item.page_id not in replacement_by_page
         ]
         evidence.extend(
             item for item in replacement.evidence if item.page_id in replacement_by_page
+        )
+        logger.info(
+            "Selective Docling parse complete: document_id=%s pages_replaced=%s evidence_items=%s",
+            canonical.document_id,
+            len(replacement_by_page),
+            len(replacement.evidence),
         )
         return canonical.model_copy(update={"evidence": evidence})

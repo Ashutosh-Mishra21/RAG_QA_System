@@ -26,13 +26,6 @@ class GenerationPipeline:
     ) -> Dict[str, Any]:
 
         run_tree = get_current_run_tree()
-        if run_tree:
-            run_tree.metadata.update(
-                {
-                    "retrieved_count": len(retrieved),
-                    "top_chunks_count": len(top_chunks),
-                }
-            )
         if retrieved is None:
             retrieved = self.retriever.retrieve(
                 query=query,
@@ -46,6 +39,13 @@ class GenerationPipeline:
 
         top_chunks = reranked[:5]  # ✅ then use it
         logger.info("[PIPELINE] Top chunks after rerank: %s", len(top_chunks))
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "retrieved_count": len(retrieved),
+                    "top_chunks_count": len(top_chunks),
+                }
+            )
 
         context, citation_map = self.context_builder.build(top_chunks)
 
@@ -113,4 +113,75 @@ class GenerationPipeline:
             "model": used_model,
             "provider": provider,
             "fallback_triggered": fallback_triggered,
+        }
+
+    @traceable(name="generation.stream", run_type="chain")
+    def stream(
+        self,
+        query: str,
+        original_query: Optional[str] = None,
+        metadata_filters=None,
+        retrieved=None,
+    ):
+        """Stream generated text, then yield the validated final result."""
+        run_tree = get_current_run_tree()
+        if retrieved is None:
+            retrieved = self.retriever.retrieve(
+                query=query,
+                original_query=original_query,
+                top_k=40,
+                metadata_filters=metadata_filters or {},
+            )
+        logger.info("[PIPELINE] Retrieved chunks for stream: %s", len(retrieved))
+
+        reranked = self.reranker.rerank(query, retrieved)
+        top_chunks = reranked[:5]
+        logger.info("[PIPELINE] Top chunks after rerank: %s", len(top_chunks))
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "retrieved_count": len(retrieved),
+                    "top_chunks_count": len(top_chunks),
+                    "streaming": True,
+                }
+            )
+
+        context, citation_map = self.context_builder.build(top_chunks)
+        llm_router = self.generator.llm_router
+        expected_provider = "api" if llm_router.primary else "local"
+        prompt = self.prompt_builder.build_prompt(query, context, expected_provider)
+
+        answer_parts = []
+        used_model = None
+        provider = None
+        for text, used_model, provider in self.generator.stream(prompt):
+            answer_parts.append(text)
+            yield {"event": "chunk", "data": {"text": text}}
+
+        answer = "".join(answer_parts)
+        validation = self.validator.validate(answer, citation_map, top_chunks)
+        fallback_triggered = expected_provider == "api" and provider == "local"
+
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "provider": provider,
+                    "model": used_model,
+                    "fallback_triggered": fallback_triggered,
+                }
+            )
+
+        yield {
+            "event": "final",
+            "data": {
+                "answer": answer,
+                "context": context,
+                "citations": validation["citations"],
+                "confidence": validation["confidence"],
+                "sources": [chunk.metadata for chunk in top_chunks],
+                "model": used_model,
+                "provider": provider,
+                "fallback_triggered": fallback_triggered,
+                "reason": validation["reason"],
+            },
         }

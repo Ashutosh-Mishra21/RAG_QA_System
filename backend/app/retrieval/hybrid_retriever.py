@@ -71,15 +71,34 @@ class HybridRetriever:
         lambda_param = min(1.0, max(0.0, lambda_param))
 
         ordered = sorted(chunks, key=lambda chunk: (-(chunk.score or 0.0), chunk.id))
+        # RRF scores are small rank-fusion values, whereas cosine similarity is
+        # approximately in [-1, 1]. Use fused rank for MMR relevance so the two
+        # terms in the MMR objective have comparable ranges. Keep chunk.score
+        # untouched: it remains the original RRF score for diagnostics/downstream.
+        last_rank = max(len(ordered) - 1, 1)
+        relevance_by_id = {
+            chunk.id: 1.0 - (rank / last_rank)
+            for rank, chunk in enumerate(ordered)
+        }
         selected = [ordered[0]]
         candidates = ordered[1:]
 
+        logger.debug(
+            "MMR decision=1 candidate_id=%s rrf_rank=1 rrf_score=%.7f "
+            "normalized_relevance=%.7f max_cosine_similarity=None mmr_score=None selected=True",
+            ordered[0].id,
+            ordered[0].score or 0.0,
+            relevance_by_id[ordered[0].id],
+        )
+        decision = 2
+        rrf_rank_by_id = {chunk.id: rank for rank, chunk in enumerate(ordered, start=1)}
         while candidates and len(selected) < k:
             best_score = float("-inf")
             best_idx = 0
+            decision_rows = []
 
             for i, c in enumerate(candidates):
-                relevance = c.score or 0.0
+                relevance = relevance_by_id[c.id]
 
                 diversity = max(
                     (self._similarity(c, s) for s in selected),
@@ -87,6 +106,7 @@ class HybridRetriever:
                 )
 
                 score = lambda_param * relevance - (1 - lambda_param) * diversity
+                decision_rows.append((c, relevance, diversity, score))
 
                 if score > best_score or (
                     score == best_score and c.id < candidates[best_idx].id
@@ -94,7 +114,23 @@ class HybridRetriever:
                     best_score = score
                     best_idx = i
 
+            selected_id = candidates[best_idx].id
+            for chunk, relevance, diversity, score in decision_rows:
+                logger.debug(
+                    "MMR decision=%d candidate_id=%s rrf_rank=%d rrf_score=%.7f "
+                    "normalized_relevance=%.7f max_cosine_similarity=%.7f "
+                    "mmr_score=%.7f selected=%s",
+                    decision,
+                    chunk.id,
+                    rrf_rank_by_id[chunk.id],
+                    chunk.score or 0.0,
+                    relevance,
+                    diversity,
+                    score,
+                    chunk.id == selected_id,
+                )
             selected.append(candidates.pop(best_idx))
+            decision += 1
 
         return selected
 

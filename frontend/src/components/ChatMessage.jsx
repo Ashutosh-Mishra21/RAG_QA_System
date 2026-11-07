@@ -31,7 +31,7 @@ function normalizeSourceLabel(s, idx) {
   return String(s);
 }
 
-export default function ChatMessage({ role, content, citations, sources, confidence, error }) {
+export default function ChatMessage({ role, content, citations, sources, confidence, error, streamError }) {
   const isUser = role === "user";
 
   if (isUser) {
@@ -84,6 +84,13 @@ export default function ChatMessage({ role, content, citations, sources, confide
           ) : (
             <div className="prose-chat">
               <ReactMarkdown>{content || ""}</ReactMarkdown>
+            </div>
+          )}
+
+          {!error && streamError && (
+            <div className="mt-3 flex items-start gap-2 text-xs text-amber-200" role="status">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Generation stopped before completion: {streamError}</span>
             </div>
           )}
 

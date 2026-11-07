@@ -53,14 +53,18 @@ REWRITTEN QUERY:
     def generate_multi_queries(self, query: str) -> List[str]:
 
         prompt = f"""
-Generate 3 alternative search queries for the following question.
+Generate 3 alternative search queries for the following question. The queries
+will be used to search a technical reference document.
 
 Rules:
 - Preserve original meaning
-- Use different wording
-- Keep them concise
-- Do NOT introduce new concepts
+- Make the first a concise semantic paraphrase
+- Make the second keyword-focused, using likely canonical technical terms or
+  terminology a reference document may use for the requested concept
+- Make the third a different concise formulation
+- Do not introduce unrelated entities or details
 - Do NOT answer the question
+- Return three distinct queries, not minor rewordings of the same sentence
 
 Original query:
 {query}
@@ -77,8 +81,17 @@ Return ONLY a list (one per line).
             for line in response.split("\n"):
                 line = line.strip()
 
-                # remove numbering (1., -, etc.)
-                line = re.sub(r"^\d+[\).\s-]*", "", line)
+                # Ignore common model preambles so they do not consume one of
+                # the three query slots and truncate a real search variant.
+                if re.match(
+                    r"^(?:here are\b|alternative search queries\b|search queries\s*:)",
+                    line,
+                    flags=re.IGNORECASE,
+                ):
+                    continue
+
+                # remove numbering and list markers (1., -, *, etc.)
+                line = re.sub(r"^(?:\d+[\).\s-]*|[-*•]\s*)", "", line)
 
                 if len(line) > 5:
                     queries.append(line)

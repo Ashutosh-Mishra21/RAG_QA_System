@@ -17,7 +17,9 @@ def health_check():
     # =========================================
     # 🔹 LLM STATUS
     # =========================================
-    llm_available = bool(settings.OPENROUTER_API_KEY)
+    llm_available = bool(
+        settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY or settings.OLLAMA_MODEL
+    )
 
     # =========================================
     # 🔹 QDRANT STATUS

@@ -24,9 +24,18 @@ class LLMCache:
 
         return None
 
-    def set(self, prompt: str, response: str, provider: str, model: str = ""):
-        key = self._hash(prompt, model)
+    def set(
+        self,
+        prompt: str,
+        response: str,
+        provider: str,
+        model: str = "",
+        cache_model: str | None = None,
+    ):
+        key = self._hash(prompt, cache_model if cache_model is not None else model)
         path = self.cache_dir / f"{key}.json"
 
         with open(path, "w", encoding="utf-8") as f:
-            json.dump({"response": response, "provider": provider}, f)
+            json.dump(
+                {"response": response, "provider": provider, "model": model}, f
+            )

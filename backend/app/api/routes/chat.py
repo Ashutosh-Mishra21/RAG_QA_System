@@ -1,8 +1,11 @@
 import logging
+import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field, field_validator
+from starlette.responses import StreamingResponse
 
 from backend.app.api.dependencies import get_rag_service
 from backend.app.api.responses import ErrorApiResponse, success_response
@@ -55,3 +58,41 @@ def chat_endpoint(
     except Exception as exc:
         logger.exception("Chat generation failed: %s", exc)
         raise HTTPException(status_code=500, detail="Chat generation failed") from exc
+
+
+@router.post("/chat/stream")
+def chat_stream_endpoint(
+    payload: ChatRequest,
+    rag_service: RagService = Depends(get_rag_service),
+) -> StreamingResponse:
+    def encode_event(event: str, data: dict[str, Any]) -> bytes:
+        encoded = json.dumps(
+            jsonable_encoder(data), ensure_ascii=False, separators=(",", ":")
+        )
+        return f"event: {event}\ndata: {encoded}\n\n".encode("utf-8")
+
+    def event_stream():
+        events = iter(rag_service.stream_answer(payload.message))
+        try:
+            for item in events:
+                yield encode_event(item["event"], item["data"])
+            yield encode_event("done", {})
+        except Exception:
+            logger.exception("Streaming chat generation failed")
+            yield encode_event(
+                "error", {"message": "Answer generation failed. Please retry."}
+            )
+        finally:
+            close = getattr(events, "close", None)
+            if close:
+                close()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

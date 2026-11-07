@@ -80,6 +80,12 @@ class IngestionService:
         if self.raw_dir.resolve() not in fp.parents:
             raise ValueError("file_path must remain inside the raw data directory")
         document_id = fp.stem
+        logger.info(
+            "Ingestion started: document_id=%s filename=%s bytes=%s",
+            document_id,
+            fp.name,
+            fp.stat().st_size,
+        )
 
         scan_supported = fp.suffix.lower() in {".pdf", ".md", ".markdown", ".txt"}
         manifest_path = (
@@ -90,11 +96,22 @@ class IngestionService:
         canonical_path = self.processed_dir / f"{document_id}_canonical.json"
         canonicalizer = Canonicalizer()
         if scan_supported:
+            logger.info("Scanning document pages: document_id=%s", document_id)
             manifest = self.page_scanner.load_or_scan(
                 fp, manifest_path, document_id=document_id
             )
             self.page_routing.decide(manifest)
             self.page_scanner.persist(manifest, manifest_path)
+            routed_pages = sum(
+                any(action != "use_native_text" for action in decision.actions)
+                for decision in manifest.routing
+            )
+            logger.info(
+                "Page scan complete: document_id=%s pages=%s selectively_routed=%s",
+                document_id,
+                manifest.page_count,
+                routed_pages,
+            )
             base_canonical = canonicalizer.from_manifest(manifest)
             canonical = base_canonical.model_copy(
                 update={
@@ -120,6 +137,11 @@ class IngestionService:
             if fp.suffix.lower() == ".pdf":
                 canonical = PageActionExecutor().execute(fp, manifest, canonical)
         else:
+            logger.info(
+                "Parsing document with Docling: document_id=%s type=%s",
+                document_id,
+                fp.suffix.lower(),
+            )
             parser = DoclingParser()
             canonical = canonicalizer.from_docling(
                 parser.parse(fp),
@@ -130,6 +152,12 @@ class IngestionService:
                 workspace_id=workspace_id,
                 document_version=document_version or "1",
             )
+
+        logger.info(
+            "Canonical evidence ready: document_id=%s evidence_items=%s",
+            document_id,
+            len(canonical.evidence),
+        )
 
         canonical_path.write_text(
             json.dumps(canonical.model_dump(mode="json"), indent=2),
@@ -247,6 +275,11 @@ class IngestionService:
         registry = ModelRegistry.instance()
         embedder = registry.get_embedder()
         chunks: List[Chunk] = EvidenceIndexer().build_chunks(canonical)
+        logger.info(
+            "Building embeddings: document_id=%s chunks=%s",
+            canonical.document_id,
+            len(chunks),
+        )
         embedding_texts = [chunk.content for chunk in chunks]
         embed_documents = getattr(embedder, "embed_documents", embedder.embed_texts)
         embeddings = embed_documents(embedding_texts)
@@ -256,6 +289,11 @@ class IngestionService:
             self._safe_delete_document(vector_store, canonical.document_id)
         if embeddings:
             try:
+                logger.info(
+                    "Writing vectors to Qdrant: document_id=%s vectors=%s",
+                    canonical.document_id,
+                    len(embeddings),
+                )
                 vector_store.upsert_chunks(chunks, embeddings)
             except Exception as exc:
                 # Retrieval can still work via keyword index when vector db is unavailable.
@@ -265,5 +303,10 @@ class IngestionService:
         keyword_index = registry.get_keyword_index()
         if replace_document and hasattr(keyword_index, "delete_document"):
             keyword_index.delete_document(canonical.document_id)
+        logger.info(
+            "Updating BM25 index: document_id=%s chunks=%s",
+            canonical.document_id,
+            len(chunks),
+        )
         keyword_index.add(chunks)
         return chunks

@@ -24,7 +24,7 @@ from .page_manifest import (
 )
 from .evidence import EvidenceProvenance, EvidenceItem
 from .canonical_document import CanonicalDocument
-from .llm_provider import LLMRouter, OllamaLLM, OpenRouterLLM
+from .llm_provider import LLMRouter, OllamaLLM, GoogleAIStudioLLM
 from .query import Query
 from .response import Response
 
@@ -43,7 +43,7 @@ __all__ = [
     "StudyDocument",
     "LLMRouter",
     "OllamaLLM",
-    "OpenRouterLLM",
+    "GoogleAIStudioLLM",
     "Query",
     "Response",
     "PageSignals",

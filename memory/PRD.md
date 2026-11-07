@@ -92,7 +92,7 @@ uvicorn backend.app.main:app --port 8000
 
 ### P1 (Next)
 
-- Streaming responses (show tokens as they arrive) — requires backend SSE support
+- Initial answer streaming through backend SSE is implemented; retrieval/progress events remain deferred.
 - Per-conversation persistence (localStorage) so chats survive reloads
 - Keyboard shortcut cheat-sheet (⌘K) for power users
 - Light-mode toggle
@@ -118,3 +118,24 @@ uvicorn backend.app.main:app --port 8000
 - `/app/frontend/src/main.jsx`, `App.jsx`, `lib/api.js`, `components/Sidebar.jsx`
 - `/app/backend/app/main.py` (Jinja2 removed; serves Vite dist)
 - `/app/frontend/dist/` (built)
+
+## 10. Streaming Chat (2026-10-28)
+
+The first streaming slice keeps the existing bounded retrieval, reranking, and
+grounded generation flow. The browser uses `POST /api/chat/stream` with Fetch
+and reads Server-Sent Events because the request body is a POST. The existing
+`POST /api/chat` JSON endpoint remains supported.
+
+- Cache hits use the same event protocol and send the cached answer as one
+  immediate `chunk`, followed by `final` metadata and `done`.
+- Cache misses stream incremental answer text, then send `final` metadata
+  (answer, citations, sources, confidence, and provider details), followed by
+  `done`. Cache writes happen only after successful completion.
+- A configured Ollama fallback may start only if Gemini fails before producing
+  text. After the first text chunk, provider failure ends the stream with an
+  `error` event; provider outputs are never combined.
+- Browser cancellation aborts the fetch and closes the response stream. Upstream
+  provider cancellation is attempted by closing the provider stream/connection.
+- Retrieval and reranking finish before the first answer chunk. Search and
+  generation progress events, stricter sentence-to-source citation checks, and
+  production deployment hardening remain future work.

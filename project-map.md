@@ -29,7 +29,8 @@ Implemented:
 - A bounded `AgenticQueryRunner` that can decompose, rewrite, search, and invoke targeted table/visual parsing. Attempts and subqueries are capped by configuration.
 - Page and region evidence lookup with disk caching scoped by document, region, tenant, and workspace.
 - Selective Docling parsing for pages routed as OCR/table/visual candidates. A targeted reparse refreshes canonical evidence and both indexes.
-- Grounded generation with context assembly, citation validation, answer confidence, OpenRouter primary routing, and Ollama fallback.
+- Grounded generation with context assembly, citation validation, answer confidence, Google AI Studio Gemini primary routing, and Ollama fallback.
+- Browser chat streaming through SSE for answer generation, including one-chunk cache hits, final citation/confidence metadata, error events, and request cancellation.
 - Tests for ingestion, canonical evidence, provenance, page routing, evidence tools, agent retry behavior, RRF/MMR stability, retrieval, generation, API contracts, and evaluation utilities.
 
 Partial or intentionally constrained:
@@ -37,7 +38,8 @@ Partial or intentionally constrained:
 - Table and visual actions currently route to Docling. They only return typed table/figure evidence when Docling produces it; no dedicated layout parser, VLM, or image understanding model is installed yet.
 - Tenant/workspace/document-version metadata is carried through ingestion, indexes, retrieval filters, and caches. HTTP authentication and external tenant identity enforcement are not implemented yet; API calls use the default scope unless a service caller provides another scope.
 - Durable storage is file-based: local raw files, JSON manifests, canonical JSON, BM25 JSON, and file-backed caches.
-- The chat API is non-streaming.
+- `/api/chat` remains available as the standard JSON endpoint; `/api/chat/stream` streams answer-generation chunks over SSE. Retrieval and reranking still complete before the first answer chunk, and progress events for those stages are deferred.
+- Stream-time provider fallback is allowed only when the configured primary fails before producing text. Once a chunk is sent, the stream terminates with an error instead of mixing provider responses.
 - Evaluation exists as Python utilities and tests; it is not yet a complete production evaluation service.
 
 Deferred on purpose:
@@ -71,7 +73,7 @@ Chat query
   -> optional targeted page/table/visual parse
   -> cross-encoder reranking
   -> context, prompt, LLM generation, citation/answer validation
-  -> answer, confidence, citations, source metadata
+  -> answer, confidence, citations, source metadata (JSON or SSE)
 ```
 
 Generation is skipped when evidence is insufficient. The expected response is a grounded "I don't know based on the available evidence." rather than a speculative answer.
@@ -254,7 +256,8 @@ RagService -> AgenticQueryRunner -> EvidenceTools -> HybridRetriever -> Generati
 
 ```text
 POST /api/upload       upload and index .md, .markdown, .txt, .pdf, .docx, .xlsx
-POST /api/chat         ask a question
+POST /api/chat         ask a question (JSON response)
+POST /api/chat/stream  ask a question (SSE answer chunks and final metadata)
 GET  /api/health       app/dependency health
 POST /api/evaluation   evaluation route; currently limited/placeholder
 ```
@@ -330,7 +333,7 @@ This is the intended implementation order. Do not skip ahead unless measurements
 ### Later production work
 
 17. Add authentication and authorization that derives tenant/workspace scope from trusted identity rather than request defaults.
-18. Add streaming responses, rate limiting, metrics, traces, agent decision logs, and evaluation dashboards.
+18. Extend the initial SSE answer stream with retrieval/generation progress events; then add rate limiting, metrics, agent decision logs, and evaluation dashboards.
 19. Consider SQL, web search, calculations, or domain-specific tools only through the same bounded tool contract.
 20. Consider distributed workers and Kubernetes only when observed load justifies them.
 

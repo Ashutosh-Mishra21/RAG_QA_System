@@ -1,10 +1,12 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
 class Settings(BaseSettings):
 
+    model_config = SettingsConfigDict(
+        extra="ignore",
+    )
     # =========================================
     # 🔹 APP
     # =========================================
@@ -18,24 +20,26 @@ class Settings(BaseSettings):
     # =========================================
     # 🔹 LANGSMITH
     # =========================================
-    LANGSMITH_TRACING: bool = False
+    LANGSMITH_TRACING: bool = True
     LANGSMITH_API_KEY: Optional[str] = None
-    LANGSMITH_PROJECT: str = "evidence-first-rag-dev"
+    LANGSMITH_PROJECT: str = "rag-qa-system"
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGSMITH_CAPTURE_CONTENT: bool = False
 
     # =========================================
     # 🔹 LLM
     # =========================================
-    OPENROUTER_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-flash-lite-latest"
 
     OLLAMA_MODEL: str = "llama3:8b"
-    OLLAMA_BASE_URL: str = "http://host.docker.internal:11434"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
 
     # =========================================
     # 🔹 VECTOR DB
     # =========================================
-    QDRANT_URL: str = "https://your-cluster.cloud.qdrant.io"
+    QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: Optional[str] = None
     QDRANT_COLLECTION: str = "rag_documents"
 
@@ -64,7 +68,11 @@ class Settings(BaseSettings):
     # 🔹 RETRIEVAL
     # =========================================
     DEFAULT_TOP_K: int = 5
-    AGENT_INITIAL_TOP_K: int = 10
+    # The Transformer failure case had its answer-bearing paragraph at fused
+    # rank 12 after query expansion. Returning only ten candidates removed it
+    # before cross-encoder reranking; 12 is the smallest measured depth that
+    # retained it through MMR and final context assembly.
+    AGENT_INITIAL_TOP_K: int = 12
     AGENT_MAX_ATTEMPTS: int = 2
     AGENT_MAX_SUBQUERIES: int = 3
 
@@ -72,10 +80,6 @@ class Settings(BaseSettings):
     # 🔹 LOGGING
     # =========================================
     LOG_LEVEL: str = "INFO"
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 settings = Settings()

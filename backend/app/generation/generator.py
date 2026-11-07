@@ -14,3 +14,7 @@ class Generator:
             answer, model, provider = self.llm_router.generate(retry_prompt)
 
         return answer, model, provider
+
+    def stream(self, prompt: str):
+        """Yield text fragments and their provider metadata from the LLM router."""
+        yield from self.llm_router.stream(prompt)

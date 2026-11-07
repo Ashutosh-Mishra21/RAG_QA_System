@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 from langsmith import traceable, get_current_run_tree
 
 from backend.app.agent import AgenticQueryRunner
@@ -115,7 +115,7 @@ class RagService:
         except (TypeError, ValueError):
             confidence = 0.0
 
-        return {
+        normalized = {
             "answer": str(result.get("answer") or ""),
             "context": str(result.get("context") or ""),
             "citations": [str(citation) for citation in citations],
@@ -126,33 +126,133 @@ class RagService:
                 if source
             ],
         }
+        for field in ("model", "provider", "fallback_triggered", "reason"):
+            if field in result:
+                normalized[field] = result[field]
+        return normalized
 
-    def aggregate_answers(self, query: str, answers: List[str]) -> str:
+    @staticmethod
+    def _stream_final_data(result: dict) -> dict:
+        """Return chat-facing fields without exposing the assembled prompt context."""
+        fields = (
+            "answer",
+            "citations",
+            "confidence",
+            "sources",
+            "model",
+            "provider",
+            "fallback_triggered",
+        )
+        return {field: result[field] for field in fields if field in result}
 
-        prompt = f"""
-            Combine the following answers into one coherent final answer.
-
-            - Remove redundancy
-            - Keep it concise
-            - Ensure logical flow
-
-            Question:
-            {query}
-
-            Answers:
-            {chr(10).join(answers)}
-
-            Final Answer:
-        """
-
-        try:
-            final_answer, _, _ = self.pipeline.generator.llm_router.generate(prompt)
-            return final_answer
-        except Exception:
-            logger.exception(
-                "Answer aggregation failed; returning concatenated answers"
+    @traceable(name="rag.answer.stream", run_type="chain")
+    def stream_answer(
+        self,
+        query: str,
+        metadata_filters=None,
+        document_id: str | None = None,
+        tenant_id: str = "default",
+        workspace_id: str = "default",
+        document_version: str | None = None,
+    ):
+        """Yield answer chunks and final metadata using the existing RAG flow."""
+        run_tree = get_current_run_tree()
+        if run_tree:
+            run_tree.metadata.update(
+                {
+                    "tenant_id": tenant_id,
+                    "workspace_id": workspace_id,
+                    "document_id": document_id,
+                    "document_version": document_version,
+                    "streaming": True,
+                }
             )
-            return " ".join(answers)
+            run_tree.tags.extend(["rag", "production", "streaming"])
+
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("Query must not be empty")
+        if len(query) > settings.RETRIEVAL_MAX_QUERY_CHARS:
+            raise ValueError("Query exceeds the maximum supported length")
+
+        filters = dict(metadata_filters or {})
+        if document_id:
+            filters["document_id"] = document_id
+        filters["tenant_id"] = tenant_id
+        filters["workspace_id"] = workspace_id
+        if document_version:
+            filters["document_version"] = document_version
+
+        cached = self.response_cache.get(query, document_id, filters)
+        if cached:
+            logger.info(
+                "Response cache hit for streaming query (document_id=%s)",
+                document_id,
+            )
+            result = self._normalize_chat_result(cached)
+            if result["answer"]:
+                yield {"event": "chunk", "data": {"text": result["answer"]}}
+            yield {"event": "final", "data": self._stream_final_data(result)}
+            return
+
+        plan, decisions, searches = self.agent.run(query, filters)
+        logger.info(
+            "Streaming agent query plan type=%s subqueries=%s decisions=%s",
+            plan.query_type,
+            len(plan.subqueries),
+            len(decisions),
+        )
+
+        retrieved = []
+        seen_chunks = set()
+        for search in searches:
+            for chunk in search["chunks"]:
+                chunk_key = getattr(chunk, "id", None) or (
+                    (chunk.metadata or {}).get("document_id"),
+                    (chunk.metadata or {}).get("page_id"),
+                    chunk.content,
+                )
+                if chunk_key not in seen_chunks:
+                    seen_chunks.add(chunk_key)
+                    retrieved.append(chunk)
+
+        if not retrieved:
+            result = {
+                "answer": "I don't know based on the available evidence.",
+                "context": "",
+                "citations": [],
+                "confidence": 0.0,
+                "sources": [],
+            }
+            try:
+                self.response_cache.set(query, result, document_id, filters)
+            except Exception:
+                logger.exception("Unable to cache completed empty-evidence response")
+            yield {"event": "chunk", "data": {"text": result["answer"]}}
+            yield {"event": "final", "data": self._stream_final_data(result)}
+            return
+
+        result = None
+        for event in self.pipeline.stream(
+            query=query,
+            original_query=query,
+            metadata_filters=filters,
+            retrieved=retrieved,
+        ):
+            if event["event"] == "chunk":
+                yield event
+            elif event["event"] == "final":
+                result = self._normalize_chat_result(event["data"])
+
+        if result is None:
+            raise RuntimeError("Generation stream ended without final metadata")
+
+        # Cache only a completed, validated response. Interrupted/failed streams
+        # leave no partial answer in the response cache.
+        try:
+            self.response_cache.set(query, result, document_id, filters)
+        except Exception:
+            logger.exception("Unable to cache completed streaming response")
+        yield {"event": "final", "data": self._stream_final_data(result)}
 
     # =========================
     # 🔹 QUERY → ANSWER (Phase 2)
@@ -167,12 +267,6 @@ class RagService:
         workspace_id: str = "default",
         document_version: str | None = None,
     ) -> dict:
-        all_answers = []
-        all_citations = []
-        all_sources = []
-        all_confidences = []
-        all_contexts = []
-
         run_tree = get_current_run_tree()
         if run_tree:
             run_tree.metadata.update(
@@ -221,69 +315,38 @@ class RagService:
             len(decisions),
         )
 
-        # Solve each planned subquery using the evidence selected by the agent.
+        # Decomposition is for finding evidence. Generate once from the union so
+        # the original question, citation map, and answer validation stay aligned.
+        retrieved = []
+        seen_chunks = set()
         for search in searches:
-            rewritten_sq = search["query"]
-            sufficiency = search["sufficiency"]
-            if sufficiency.sufficient:
-                result = self.pipeline.run(
-                    query=rewritten_sq,
-                    original_query=query,
-                    metadata_filters=filters,
-                    retrieved=search["chunks"],
+            for chunk in search["chunks"]:
+                chunk_key = getattr(chunk, "id", None) or (
+                    (chunk.metadata or {}).get("document_id"),
+                    (chunk.metadata or {}).get("page_id"),
+                    chunk.content,
                 )
+                if chunk_key in seen_chunks:
+                    continue
+                seen_chunks.add(chunk_key)
+                retrieved.append(chunk)
 
-                if result.get("context"):
-                    result["context"] = result["context"].strip()
-            else:
-                result = {
-                    "answer": "I don't know based on the available evidence.",
-                    "citations": [],
-                    "confidence": sufficiency.score,
-                    "sources": [
-                        {
-                            "document_id": item.document_id,
-                            "page_id": item.page_id,
-                            "page_number": item.provenance.source_page,
-                            "evidence_id": item.evidence_id,
-                            "evidence_type": item.evidence_type,
-                        }
-                        for item in search["evidence"][:5]
-                    ],
-                }
-
-            result = self._normalize_chat_result(result)
-
-            all_answers.append(result["answer"])
-            all_citations.extend(result.get("citations", []))
-            all_sources.extend(result.get("sources", []))
-            all_confidences.append(result["confidence"])
-
-        final_answer = (
-            all_answers[0]
-            if len(all_answers) == 1
-            else self.aggregate_answers(query, all_answers)
-        )
-        unique_sources = list(
-            {
-                (s.get("evidence_id"), s.get("document_id"), s.get("page_id")): s
-                for s in all_sources
-                if isinstance(s, dict)
-            }.values()
-        )
-        result = self._normalize_chat_result(
-            {
-                "answer": final_answer,
-                "context": "\n\n".join(all_contexts),
-                "citations": list(set(all_citations)),  # or extract later
-                "confidence": (
-                    sum(all_confidences) / len(all_confidences)
-                    if all_confidences
-                    else 0.0
-                ),
-                "sources": unique_sources,
+        if not retrieved:
+            result = {
+                "answer": "I don't know based on the available evidence.",
+                "context": "",
+                "citations": [],
+                "confidence": 0.0,
+                "sources": [],
             }
-        )
+        else:
+            result = self.pipeline.run(
+                query=query,
+                original_query=query,
+                metadata_filters=filters,
+                retrieved=retrieved,
+            )
+        result = self._normalize_chat_result(result)
         self.response_cache.set(query, result, document_id, filters)
         return result
 

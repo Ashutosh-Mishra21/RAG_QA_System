@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[3]
+RESPONSE_CACHE_VERSION = "rag-answer-v2"
 
 
 class ResponseCache:
@@ -18,7 +19,9 @@ class ResponseCache:
         metadata_filters: dict | None = None,
     ) -> str:
         scope = json.dumps(metadata_filters or {}, sort_keys=True, default=str)
-        cache_input = f"{query}_{document_id or ''}_{scope}"
+        # Changing this namespace prevents old ungrounded aggregate answers from
+        # being served after the answer-generation flow changes.
+        cache_input = f"{RESPONSE_CACHE_VERSION}_{query}_{document_id or ''}_{scope}"
         return hashlib.md5(cache_input.strip().lower().encode()).hexdigest()
 
     def get(

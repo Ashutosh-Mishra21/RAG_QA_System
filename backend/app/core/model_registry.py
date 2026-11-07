@@ -1,16 +1,11 @@
-import os
 import logging
 from threading import Lock
 from typing import Optional
-from dotenv import load_dotenv
-from pathlib import Path
 
 from backend.app.indexing import Embedder, KeywordIndex
 from backend.app.retrieval import CrossEncoderReranker
 from backend.app.core.config import settings
 from backend.app.core.embedding_provider import EmbeddingModelProvider
-
-load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 logger = logging.getLogger(__name__)
 
@@ -65,42 +60,40 @@ class ModelRegistry:
 
     def get_llm_router(self):
 
-        from backend.app.models import LLMRouter, OllamaLLM, OpenRouterLLM
+        from backend.app.models import LLMRouter, OllamaLLM, GoogleAIStudioLLM
 
         if self._llm_router is not None:
             return self._llm_router
 
         primary = None
         fallback = None
+        gemini_api_key = settings.GEMINI_API_KEY or settings.GOOGLE_API_KEY
+        logger.info("[MODEL_REGISTRY] Gemini API key present: %s", bool(gemini_api_key))
+        logger.info("[MODEL_REGISTRY] OLLAMA_MODEL: %s", settings.OLLAMA_MODEL)
         logger.info(
-            "[MODEL_REGISTRY] OPENROUTER_API_KEY present: %s",
-            bool(os.getenv("OPENROUTER_API_KEY")),
-        )
-        logger.info("[MODEL_REGISTRY] OLLAMA_MODEL: %s", os.getenv("OLLAMA_MODEL"))
-        logger.info(
-            "[MODEL_REGISTRY] OLLAMA_BASE_URL: %s", os.getenv("OLLAMA_BASE_URL")
+            "[MODEL_REGISTRY] OLLAMA_BASE_URL: %s", settings.OLLAMA_BASE_URL
         )
 
-        if os.getenv("OPENROUTER_API_KEY"):
-            model_name = os.getenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
+        if gemini_api_key:
+            model_name = settings.GEMINI_MODEL
             logger.info(
-                "[MODEL_REGISTRY] Initializing primary LLM provider: OpenRouter (%s)",
+                "[MODEL_REGISTRY] Initializing primary LLM provider: Google AI Studio (%s)",
                 model_name,
             )
             try:
-                primary = OpenRouterLLM(model=model_name)
+                primary = GoogleAIStudioLLM(model=model_name, api_key=gemini_api_key)
                 logger.info(
-                    "[MODEL_REGISTRY] Primary LLM provider initialized successfully"
+                    "[MODEL_REGISTRY] Google AI Studio primary initialized successfully"
                 )
             except Exception as exc:
                 logger.exception(
-                    "[MODEL_REGISTRY] Failed to initialize OpenRouterLLM: %s", exc
+                    "[MODEL_REGISTRY] Failed to initialize GoogleAIStudioLLM: %s", exc
                 )
                 primary = None
 
-        if os.getenv("OLLAMA_MODEL") or os.getenv("OLLAMA_BASE_URL"):
-            ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
-            ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        if settings.OLLAMA_MODEL or settings.OLLAMA_BASE_URL:
+            ollama_model = settings.OLLAMA_MODEL
+            ollama_base_url = settings.OLLAMA_BASE_URL
             logger.info(
                 "[MODEL_REGISTRY] Configured fallback LLM provider: Ollama (%s @ %s)",
                 ollama_model,
@@ -117,7 +110,7 @@ class ModelRegistry:
 
         if primary is None and fallback is None:
             raise RuntimeError(
-                "No real LLM provider configured. Set OPENROUTER_API_KEY or OLLAMA_* env vars."
+                "No LLM provider configured. Set GEMINI_API_KEY (or GOOGLE_API_KEY) or configure Ollama."
             )
 
         logger.info(

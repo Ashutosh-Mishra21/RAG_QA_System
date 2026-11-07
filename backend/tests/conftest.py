@@ -1,6 +1,6 @@
+import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -9,5 +9,6 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# 🔥 Load .env explicitly
-load_dotenv(ROOT / ".env", override=True)
+# Keep pytest runs offline from LangSmith even when the developer .env enables it.
+# The application bootstrap loads .env later with override=False, so this setting wins.
+os.environ["LANGSMITH_TRACING"] = "false"

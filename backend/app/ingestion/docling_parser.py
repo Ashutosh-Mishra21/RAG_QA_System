@@ -120,6 +120,7 @@ class DoclingParser:
         """Parse selected PDF pages using Docling's 1-indexed page ranges."""
         if not page_numbers:
             return _CombinedDocument([])
+
         if any(page < 1 for page in page_numbers):
             raise ValueError("Page numbers must be positive")
 
@@ -127,27 +128,36 @@ class DoclingParser:
         if path.suffix.lower() != ".pdf":
             raise ValueError("Page-selective parsing currently supports PDF files only")
 
-        ranges = []
+        # Group consecutive page numbers into inclusive ranges.
+        ranges: list[tuple[int, int]] = []
         sorted_pages = sorted(page_numbers)
         start = previous = sorted_pages[0]
+
         for page in sorted_pages[1:]:
             if page != previous + 1:
                 ranges.append((start, previous))
                 start = page
             previous = page
+
         ranges.append((start, previous))
 
+        converter = self._get_docling_converter()
         documents = []
+
         for start_page, end_page in ranges:
             try:
-                converter = self._get_docling_converter(
-                    page_range=(start_page, end_page)
+                result = converter.convert(
+                    str(path),
+                    page_range=(start_page, end_page),
                 )
-                documents.append(converter.convert(str(path)).document)
+                documents.append(result.document)
+
             except Exception as exc:
                 raise RuntimeError(
-                    f"Docling failed to parse pages {start_page}-{end_page} of {path.name}"
+                    f"Docling failed to parse pages "
+                    f"{start_page}-{end_page} of {path.name}"
                 ) from exc
+
         return _CombinedDocument(documents)
 
     @staticmethod
@@ -176,8 +186,8 @@ class DoclingParser:
 
         return _SimpleDocument(elements)
 
-    def _get_docling_converter(self, page_range: tuple[int, int] | None = None):
-        if page_range is None and self.converter is not None:
+    def _get_docling_converter(self):
+        if self.converter is not None:
             return self.converter
 
         try:
@@ -193,18 +203,13 @@ class DoclingParser:
                 "Docling is required for PDF/DOCX parsing but failed to load."
             ) from exc
 
-        # PDF pipeline config
         pipeline_options = PdfPipelineOptions()
         pipeline_options.do_ocr = True
-        if page_range is not None:
-            pipeline_options.page_range = page_range
 
-        converter = DocumentConverter(
+        self.converter = DocumentConverter(
             format_options={
                 InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
             }
         )
 
-        if page_range is None:
-            self.converter = converter
-        return converter
+        return self.converter

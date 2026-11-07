@@ -43,6 +43,92 @@ export async function sendChatMessage(message) {
 }
 
 /**
+ * POST /api/chat/stream using Fetch so the browser can consume the SSE body.
+ * Event callback receives { event, data }; the function resolves with final data.
+ */
+export async function streamChatMessage(message, onEvent, { signal } = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({ message }),
+    signal,
+  });
+
+  if (!response.ok) {
+    let detail = `Chat request failed (HTTP ${response.status}).`;
+    try {
+      const payload = await response.json();
+      detail = payload?.error || payload?.detail || detail;
+    } catch {
+      // Keep the HTTP status message when the response is not JSON.
+    }
+    throw new Error(detail);
+  }
+  if (!response.body) {
+    throw new Error("The browser could not read the answer stream.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalData = null;
+  let completed = false;
+
+  const dispatchFrame = (frame) => {
+    if (!frame.trim()) return;
+    let event = "message";
+    const dataLines = [];
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+    if (!dataLines.length) return;
+
+    let data;
+    try {
+      data = JSON.parse(dataLines.join("\n"));
+    } catch {
+      throw new Error("The server sent an invalid streaming event.");
+    }
+    if (event === "error") {
+      throw new Error(data?.message || "Answer generation failed.");
+    }
+    if (event === "final") finalData = data;
+    if (event === "done") completed = true;
+    onEvent?.({ event, data });
+  };
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n");
+      let separator;
+      while ((separator = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, separator);
+        buffer = buffer.slice(separator + 2);
+        dispatchFrame(frame);
+      }
+    }
+    buffer += decoder.decode();
+    buffer = buffer.replace(/\r\n/g, "\n");
+    if (buffer.trim()) dispatchFrame(buffer);
+  } finally {
+    if (!completed) await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+
+  if (!completed || !finalData) {
+    throw new Error("The answer stream ended before completion.");
+  }
+  return finalData;
+}
+
+/**
  * POST /api/upload   (multipart/form-data)
  * Used by the sidebar upload button.
  */

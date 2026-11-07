@@ -52,6 +52,79 @@ def test_mmr_uses_embeddings_to_select_diverse_results():
     assert [chunk.id for chunk in results] == ["a", "c"]
 
 
+def test_mmr_normalizes_rrf_relevance_and_keeps_failure_case_evidence(caplog):
+    retriever = HybridRetriever(None, None)
+    seed = Chunk(
+        id="72123411-ee28-5e7f-85a2-890c1d0d3b33",
+        content="Figure 1: The Transformer - model architecture.",
+        metadata={},
+        score=0.0669606,
+        embedding=[1.0, 0.0, 0.0],
+    )
+    diverse_candidate = Chunk(
+        id="96dab554-56b8-5690-bef1-8b4ec4209ff4",
+        content="Evaluation details about translation results.",
+        metadata={},
+        score=0.0661327,
+        embedding=[0.0, 1.0, 0.0],
+    )
+    # This is an answer-bearing chunk from the logged failure case. Its raw RRF
+    # score is much smaller than cosine similarity, but it ranks above the final
+    # filler candidate and should survive MMR after relevance normalization.
+    answer_chunk = Chunk(
+        id="8a8f89a3-52d2-527e-957c-60769c40ec5f",
+        content=(
+            "The dominant sequence transduction models include an encoder and a "
+            "decoder. The Transformer is based solely on attention mechanisms."
+        ),
+        metadata={},
+        score=0.0419111,
+        embedding=[1.0, 0.0, 0.0],
+    )
+    filler = Chunk(
+        id="filler",
+        content="A low-ranked chunk unrelated to the architecture question.",
+        metadata={},
+        score=0.0200000,
+        embedding=[0.0, 0.0, 1.0],
+    )
+    original_scores = {chunk.id: chunk.score for chunk in (seed, diverse_candidate, answer_chunk, filler)}
+
+    # Reproduce the pre-patch MMR objective on the same candidates to assert
+    # that this fixture represents the score-scale failure being fixed.
+    baseline_selected = [seed]
+    baseline_candidates = [diverse_candidate, answer_chunk, filler]
+    while baseline_candidates and len(baseline_selected) < 3:
+        best_index = max(
+            range(len(baseline_candidates)),
+            key=lambda i: (
+                0.85 * (baseline_candidates[i].score or 0.0)
+                - 0.15 * max(
+                    retriever._similarity(baseline_candidates[i], chosen)
+                    for chosen in baseline_selected
+                ),
+                tuple(-ord(char) for char in baseline_candidates[i].id),
+            ),
+        )
+        baseline_selected.append(baseline_candidates.pop(best_index))
+    assert answer_chunk.id not in {chunk.id for chunk in baseline_selected}
+
+    with caplog.at_level("DEBUG", logger="backend.app.retrieval.hybrid_retriever"):
+        selected = retriever._mmr(
+            [filler, answer_chunk, diverse_candidate, seed],
+            k=3,
+            lambda_param=0.85,
+        )
+
+    assert answer_chunk.id in {chunk.id for chunk in selected}
+    assert answer_chunk.id in {chunk.id for chunk in selected} - {chunk.id for chunk in baseline_selected}
+    assert {chunk.id: chunk.score for chunk in (seed, diverse_candidate, answer_chunk, filler)} == original_scores
+    assert "rrf_rank=3" in caplog.text
+    assert "normalized_relevance=0.3333333" in caplog.text
+    assert "max_cosine_similarity=1.0000000" in caplog.text
+    assert "selected=True" in caplog.text
+
+
 def test_rrf_and_mmr_break_ties_by_stable_chunk_id():
     retriever = HybridRetriever(None, None)
     left = Chunk(id="a", content="left", metadata={}, score=1.0, embedding=[1.0, 0.0])

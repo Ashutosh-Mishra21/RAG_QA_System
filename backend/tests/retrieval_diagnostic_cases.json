@@ -1,0 +1,24 @@
+[
+  {
+    "question": "According to the uploaded Transformer paper, what are the two main parts of the model?",
+    "expected_terms": ["encoder", "decoder"]
+  },
+  {
+    "question": "What are the main components of an encoder layer in the Transformer?",
+    "expected_terms": ["encoder", "self-attention", "feed-forward"]
+  },
+  {
+    "question": "What attention mechanisms are used in a Transformer decoder layer?",
+    "expected_terms": ["decoder", "masked", "self-attention", "encoder-decoder"]
+  },
+  {
+    "question": "What is the capital city of Japan?",
+    "expected_terms": [],
+    "expected_answerable": false
+  },
+  {
+    "question": "What ingredients and oven temperature are needed to bake a chocolate cake?",
+    "expected_terms": [],
+    "expected_answerable": false
+  }
+]

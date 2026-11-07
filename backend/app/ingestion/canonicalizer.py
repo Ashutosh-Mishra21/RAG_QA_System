@@ -76,7 +76,7 @@ class Canonicalizer:
             text = str(getattr(element, "text", "")).strip()
             if not text:
                 continue
-            page_number = getattr(element, "page_number", None) or 1
+            page_number = Canonicalizer._source_page_number(element)
             source_bbox = self._source_bbox(element)
             evidence_type = self._evidence_type(element)
             evidence_id = str(
@@ -114,6 +114,34 @@ class Canonicalizer:
             document_version=document_version,
             evidence=evidence,
         )
+
+    @staticmethod
+    def _source_page_number(element: Any) -> int:
+        """Read one-based page numbers from adapters or Docling provenance."""
+        page_number = getattr(element, "page_number", None)
+        if page_number is not None:
+            try:
+                normalized = int(page_number)
+                if normalized >= 1:
+                    return normalized
+            except (TypeError, ValueError):
+                pass
+
+        provenance = getattr(element, "prov", None) or []
+        if provenance:
+            source = provenance[-1]
+            page_no = (
+                source.get("page_no")
+                if isinstance(source, dict)
+                else getattr(source, "page_no", None)
+            )
+            if page_no is not None:
+                try:
+                    # Docling page_no is zero-based; application page numbers are one-based.
+                    return max(1, int(page_no) + 1)
+                except (TypeError, ValueError):
+                    pass
+        return 1
 
     @staticmethod
     def _source_bbox(element: Any) -> list[float] | None:

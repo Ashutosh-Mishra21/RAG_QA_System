@@ -66,7 +66,7 @@ flowchart LR
     RR --> CTX[Context Builder]
     CTX --> PROMPT[Prompt Builder]
     PROMPT --> GEN[Generator]
-    GEN --> LLM[OpenRouter Primary / Ollama Fallback]
+    GEN --> LLM[Google AI Studio Gemini Primary / Ollama Fallback]
     GEN --> VAL[Answer Validator + Citations]
 
     AGENT --> CACHE[Shared file caches]
@@ -90,7 +90,7 @@ flowchart LR
 - Bounded agentic query planning that selects retrieval, rewriting, decomposition,
   evidence evaluation, and targeted page parsing before generation.
 - RAG generation pipeline with context building, prompt construction, model routing, validation, citations, confidence scores, and source metadata.
-- OpenRouter as the primary LLM provider with Ollama fallback support.
+- Google AI Studio Gemini as the primary LLM provider with Ollama fallback support.
 - File-based LLM cache and response cache under `data/cache`.
 - Application logging to console and `backend/logs/app.log`.
 - Standard API response envelope for success and error responses.
@@ -177,7 +177,7 @@ distributed traces, agent decision traces, and RAG quality signals.
 | Vector DB | Qdrant Cloud |
 | Retrieval | Dense search, BM25 keyword search, weighted RRF fusion, MMR |
 | Reranking | SentenceTransformers CrossEncoder |
-| Generation | OpenRouter, Ollama fallback |
+| Generation | Gemini API through Google AI Studio, Ollama fallback |
 | Evaluation | Pytest, retrieval metrics, generation evaluators |
 | Deployment | Vercel, Render, Qdrant Cloud, Docker |
 
@@ -369,6 +369,26 @@ Response:
 }
 ```
 
+### `POST /api/chat/stream`
+
+The browser chat uses this SSE endpoint to receive answer text as it is
+generated. It accepts the same JSON body as `/api/chat`; the JSON endpoint
+remains available for scripts and clients that prefer a complete response.
+
+Events are sent in this order:
+
+```text
+event: chunk   data: {"text":"..."}
+event: chunk   data: {"text":"..."}
+event: final   data: {"answer":"...","citations":[],"sources":[],"confidence":0.0,...}
+event: done    data: {}
+```
+
+On a cache hit, the complete answer is emitted as one `chunk`, followed by
+`final` and `done`. A generation error emits `error` and closes the stream.
+Retrieval and reranking complete before answer chunks begin; this version does
+not emit search-progress events.
+
 ### `POST /api/evaluation`
 
 Current API route returns a pending status. The evaluation implementation lives under `backend/evaluation`.
@@ -380,7 +400,7 @@ Current API route returns a pending status. The evaluation implementation lives 
 - Python 3.10+
 - Node.js 18+
 - Qdrant Cloud URL and API key
-- OpenRouter API key, or a reachable Ollama server
+- Gemini API key from Google AI Studio, or a reachable Ollama server
 
 ### Backend
 
@@ -412,8 +432,8 @@ APP_NAME=Enterprise RAG QA System
 APP_VERSION=1.0.0
 DEBUG=false
 
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=google/gemini-2.0-flash-001
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.8-flash
 
 OLLAMA_MODEL=llama3:8b
 OLLAMA_BASE_URL=http://localhost:11434
@@ -479,9 +499,122 @@ The evaluation layer includes:
 
 Some tests and evaluation paths require Qdrant Cloud and an LLM provider to be configured.
 
+### Current Architecture Baseline
+
+`backend/evaluation/agentic_eval_set.json` is a small, rubric-based smoke set for
+the current evidence-first architecture. Its questions are grounded in this
+README and `project-map.md`. It checks core architecture facts, evidence
+provenance, bounded agent behavior, current limitations, and roadmap claims.
+The runner calls the live `/api/chat` endpoint and reports concept coverage,
+citations, sources, and confidence. This is an initial regression baseline, not
+a substitute for human review or a labeled document-level retrieval benchmark.
+
+Run from the repository root in PowerShell. Start the backend in one terminal:
+
+```powershell
+$env:QDRANT_COLLECTION = "rag_qa_eval_dev"
+$env:BM25_INDEX_PATH = "data/index/bm25_eval.json"
+conda activate genai-env
+uvicorn backend.app.main:app --reload --port 8000
+```
+
+In a second terminal, index the two source documents used by the evaluation
+questions, then run the benchmark:
+
+```powershell
+curl.exe -F "file=@README.md" http://localhost:8000/api/upload
+curl.exe -F "file=@project-map.md" http://localhost:8000/api/upload
+python backend/evaluation/run_agentic_eval.py --api http://localhost:8000 --delay 1 --output data/evaluation/agentic-baseline.json
+```
+
+The upload calls must return `"success": true`. Use a development Qdrant
+collection and BM25 index path for this run because uploading documents changes
+the configured indexes. Upload these two files once; `/api/upload` assigns a
+new document ID on every upload. The evaluator prints a
+PASS/FAIL line for every case and an overall summary. A case passes when its
+answer contains at least the configured number of expected concepts. Review
+failed answers and the saved JSON report; concept matching is intentionally a
+simple, inspectable heuristic and can miss valid paraphrases. Treat this as a
+smoke baseline; it does not replace human review or a retrieval benchmark with
+manually labeled relevant passages.
+The 14 benchmark cases call the live model, so a run can take time and use
+provider quota. The commands above isolate the vector collection and BM25 file
+from the app's default indexes; they still use the configured Qdrant service.
+
+Run the documented focused regressions separately:
+
+```powershell
+conda run -n genai-env pytest -q backend/tests/test_agent_runner.py backend/tests/test_evidence_workflow.py backend/tests/test_retrieval_modes.py
+```
+
+Run the full backend suite when the configured LLM provider and Qdrant are
+available:
+
+```powershell
+conda run -n genai-env pytest -q backend/tests
+```
+
+Build-check the frontend separately:
+
+```powershell
+cd frontend
+npm ci
+npm run build
+cd ..
+```
+
+`backend/evaluation/full_evaluation.py` is the older corpus-wide evaluator. It
+ingests every file in `data/raw`, calls the configured LLM, and uses the older
+generic datasets; it can change your current index and incur provider usage.
+Use the architecture baseline above for the first pass.
+
+### Interactive End-to-End Run (without pytest)
+
+Run the real FastAPI upload and chat routes in-process with visible application
+logs. The runner uses a dedicated Qdrant collection and BM25 index by default,
+so it does not write to the configured default indexes.
+
+```powershell
+python -m backend.evaluation.run_end_to_end "data/raw/your-document.pdf" --question "What are the main findings?"
+```
+
+Repeat `--question` to ask multiple questions. Add `--langsmith` to enable
+tracing for this run. The configured LangSmith key must be valid and have access
+to the selected project; otherwise the SDK will report a rejected request. To
+use the configured indexes, add `--use-configured-index`.
+
+The runner prints health, upload, scan/parse, canonical evidence, embedding,
+Qdrant/BM25 indexing, retrieval, generation, citations, and source metadata as
+the API routes execute. It stores the uploaded copy and processed evidence under
+`data/`, and each upload receives a new document ID. Repeated runs therefore
+add another document to the dedicated evaluation collection.
+
+### Detailed Retrieval and Generation Trace
+
+Use `backend/evaluation/debug_rag_flow.py` to inspect response-cache status,
+agent subqueries, per-search sufficiency, candidate documents, reranked chunks,
+the exact context sent to the generator, provider output, and validation. Stop a
+separately running Uvicorn process first. Without `--upload`, the script reads
+the currently configured Qdrant collection and BM25 index. Supplying `--upload`
+uses the real upload route and changes those configured indexes.
+
+```powershell
+conda activate genai-env
+python -m backend.evaluation.debug_rag_flow `
+  --question "According to the uploaded Transformer paper, what are the two main parts of the model?" `
+  --show-context `
+  --bypass-llm-cache
+```
+
+Repeat `--question` or add `--upload "path\to\document.pdf"` as needed. The
+diagnostic always reports a response-cache hit but continues through retrieval
+to expose the current evidence. `--bypass-llm-cache` prevents cached LLM outputs
+from masking a fresh generation and avoids writing prompt-cache entries during
+that run. Cache files are not cleared by the script.
+
 ## Current Limitations
 
-- `/api/chat` is currently non-streaming.
+- `/api/chat` provides the JSON response; `/api/chat/stream` provides SSE answer streaming.
 - The keyword index is persisted as a versioned BM25 file and still requires
  re-indexing when the embedding/indexing configuration changes.
 - Uploaded documents are stored on local/container disk, not object storage.
@@ -501,7 +634,7 @@ Planned learning and implementation order:
 - Add structured Prometheus/Grafana metrics for agent decisions and RAG quality.
 - Add async execution for long-running retrieval and ingestion paths.
 - Add Redis/Celery for background ingestion and retrieval work.
-- Add streaming responses.
+- Add retrieval and generation progress events to the initial SSE answer stream.
 
 ### Then
 
@@ -538,7 +671,7 @@ Planned learning and implementation order:
   calculations, and domain-specific capabilities.
 - Add explicit evidence grading, confidence calibration, and re-plan policies
   based on answer quality rather than retrieval count alone.
-- Add streaming chat responses for lower perceived latency.
+- Extend SSE chat with retrieval/generation progress events for lower perceived latency across the full request lifecycle.
 - Move long-running ingestion/indexing work to Celery workers backed by Redis.
 - Add durable object storage for uploaded source files.
 - Add Prometheus metrics, Grafana dashboards, and OpenTelemetry traces.
@@ -563,5 +696,5 @@ conda run -n genai-env pytest -q `
 ```
 
 The full API test suite also requires a configured LLM provider for tests that
-exercise the application dependency graph. Configure OpenRouter or Ollama
+exercise the application dependency graph. Configure Gemini or Ollama
 before running the complete suite.

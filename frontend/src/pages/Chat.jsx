@@ -4,7 +4,7 @@ import { Send, Sparkles, AlertTriangle, ArrowLeft, Menu, X } from "lucide-react"
 import Sidebar from "../components/Sidebar";
 import ChatMessage from "../components/ChatMessage";
 import TypingIndicator from "../components/TypingIndicator";
-import { sendChatMessage, API_BASE_URL } from "../lib/api";
+import { streamChatMessage, API_BASE_URL } from "../lib/api";
 
 const SUGGESTIONS = [
     "Summarize the main findings of the uploaded document.",
@@ -22,6 +22,7 @@ export default function Chat() {
     const [mobileSidebar, setMobileSidebar] = useState(false);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
+    const activeRequestRef = useRef(null);
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -33,6 +34,11 @@ export default function Chat() {
         inputRef.current?.focus();
     }, []);
 
+    useEffect(() => () => {
+        activeRequestRef.current?.abort();
+        activeRequestRef.current = null;
+    }, []);
+
     const hasMessages = messages.length > 0;
 
     const send = async (text) => {
@@ -41,54 +47,79 @@ export default function Chat() {
 
         setGlobalError(null);
         const userMsg = { id: `u-${Date.now()}`, role: "user", content: msg };
-        setMessages((m) => [...m, userMsg]);
+        const assistantId = `a-${Date.now()}`;
+        const controller = new AbortController();
+        activeRequestRef.current = controller;
+        setMessages((m) => [
+            ...m,
+            userMsg,
+            {
+                id: assistantId,
+                role: "assistant",
+                content: "",
+                citations: [],
+                sources: [],
+                streaming: true,
+            },
+        ]);
         setInput("");
         setIsSending(true);
 
         try {
-            const response = await sendChatMessage(msg);
-            if (!response?.success) {
-                throw new Error(response?.error || "Chat request failed.");
-            }
-
-            const data = response?.data;
-
-            const aiMsg = {
-                id: `a-${Date.now()}`,
-                role: "assistant",
-                content: data?.answer || "(no answer returned)",
-                citations: data?.citations || [],
-                sources: data?.sources || [],
-                confidence:
-                    typeof data?.confidence === "number"
-                        ? data.confidence
-                        : undefined,
-            };
-            setMessages((m) => [...m, aiMsg]);
-        } catch (err) {
-            const detail =
-                err?.response?.data?.error ||
-                err?.response?.data?.detail ||
-                err?.message ||
-                "Unable to reach the backend.";
-            const status = err?.response?.status ? ` (HTTP ${err.response.status})` : "";
-            const friendly =
-                err?.code === "ERR_NETWORK"
-                    ? `Couldn't reach ${API_BASE_URL}. Make sure the backend is running.`
-                    : `${detail}${status}`;
-            setGlobalError(friendly);
-            setMessages((m) => [
-                ...m,
-                {
-                    id: `e-${Date.now()}`,
-                    role: "assistant",
-                    content: friendly,
-                    error: true,
+            await streamChatMessage(
+                msg,
+                ({ event, data }) => {
+                    if (event === "chunk" && typeof data?.text === "string") {
+                        setMessages((current) => current.map((item) =>
+                            item.id === assistantId
+                                ? { ...item, content: item.content + data.text }
+                                : item
+                        ));
+                    }
+                    if (event === "final") {
+                        setMessages((current) => current.map((item) =>
+                            item.id === assistantId
+                                ? {
+                                    ...item,
+                                    content: data?.answer ?? item.content,
+                                    citations: data?.citations || [],
+                                    sources: data?.sources || [],
+                                    confidence: typeof data?.confidence === "number"
+                                        ? data.confidence
+                                        : undefined,
+                                    provider: data?.provider,
+                                    model: data?.model,
+                                    fallbackTriggered: data?.fallback_triggered,
+                                    streaming: false,
+                                }
+                                : item
+                        ));
+                    }
                 },
-            ]);
+                { signal: controller.signal }
+            );
+        } catch (err) {
+            if (err?.name !== "AbortError") {
+                const friendly = err?.message || `Couldn't reach ${API_BASE_URL}. Make sure the backend is running.`;
+                setGlobalError(friendly);
+                setMessages((current) => current.map((item) =>
+                    item.id === assistantId
+                        ? {
+                            ...item,
+                            content: item.content || friendly,
+                            error: !item.content,
+                            streamError: item.content ? friendly : undefined,
+                            streaming: false,
+                        }
+                        : item
+                ));
+            }
         } finally {
-            setIsSending(false);
-            setTimeout(() => inputRef.current?.focus(), 0);
+            if (activeRequestRef.current === controller) {
+                activeRequestRef.current = null;
+                setIsSending(false);
+                setTimeout(() => inputRef.current?.focus(), 0);
+            }
         }
     };
 
@@ -105,6 +136,9 @@ export default function Chat() {
     };
 
     const newChat = () => {
+        activeRequestRef.current?.abort();
+        activeRequestRef.current = null;
+        setIsSending(false);
         setMessages([]);
         setGlobalError(null);
         setInput("");
@@ -246,6 +280,7 @@ export default function Chat() {
                                         sources={m.sources}
                                         confidence={m.confidence}
                                         error={m.error}
+                                        streamError={m.streamError}
                                     />
                                 ))}
                                 {isSending && <TypingIndicator />}

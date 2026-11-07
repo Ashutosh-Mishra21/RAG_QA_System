@@ -1,0 +1,105 @@
+{
+  "name": "Evidence-first RAG architecture smoke evaluation",
+  "version": 1,
+  "description": "A small rubric-based benchmark grounded in README.md and project-map.md. Upload both files to the running app before evaluating.",
+  "cases": [
+    {
+      "id": "architecture-ingestion",
+      "category": "architecture",
+      "query": "Describe the document ingestion path from upload through indexing.",
+      "expected_concepts": [["page scanner", "pagescanner"], ["canonicalizer"], ["evidenceitem", "canonical evidence"], ["qdrant"], ["bm25"]],
+      "min_concept_hits": 4
+    },
+    {
+      "id": "architecture-query-flow",
+      "category": "architecture",
+      "query": "What happens to a chat query before an answer is generated?",
+      "expected_concepts": [["agenticqueryrunner", "agent runner", "bounded agent"], ["hybrid retrieval", "hybridretriever"], ["evidence sufficiency", "sufficiency"], ["rerank"], ["citation", "validator"]],
+      "min_concept_hits": 4
+    },
+    {
+      "id": "retrieval-fusion",
+      "category": "retrieval",
+      "query": "Which retrieval methods are combined, and how are their rankings combined?",
+      "expected_concepts": [["dense", "vector"], ["bm25", "keyword"], ["reciprocal rank fusion", "rrf"], ["mmr"]],
+      "min_concept_hits": 3
+    },
+    {
+      "id": "bounded-agent",
+      "category": "agent",
+      "query": "How does the agent avoid unbounded retries or recursive planning?",
+      "expected_concepts": [["max_attempts", "attempts are capped", "bounded"], ["max_subqueries", "subqueries are capped"], ["rewrite", "retry"]],
+      "min_concept_hits": 2
+    },
+    {
+      "id": "weak-evidence",
+      "category": "grounding",
+      "query": "What should the system do when it cannot find enough supporting evidence?",
+      "expected_concepts": [["i don't know", "do not know", "insufficient evidence"], ["generation is skipped", "skip generation", "not generate"], ["confidence", "sources"]],
+      "min_concept_hits": 2
+    },
+    {
+      "id": "canonical-metadata",
+      "category": "provenance",
+      "query": "Name at least four provenance or scope fields that must survive retrieval and indexing.",
+      "expected_concepts": [["page_id"], ["bbox"], ["evidence_type"], ["tenant_id"], ["workspace_id"], ["document_version"]],
+      "min_concept_hits": 4
+    },
+    {
+      "id": "targeted-parsing",
+      "category": "ingestion",
+      "query": "How are table or visual questions handled when ordinary retrieved text is weak?",
+      "expected_concepts": [["targeted", "selective"], ["parse_table", "table parsing"], ["parse_visual", "visual parsing"], ["docling"]],
+      "min_concept_hits": 3
+    },
+    {
+      "id": "specialist-parsers",
+      "category": "roadmap",
+      "query": "Are OCR, MinerU, PaddleOCR, or a VLM already part of the active parser stack? Explain.",
+      "expected_concepts": [["deferred", "not installed", "not yet"], ["evaluation", "failure class", "measured"]],
+      "min_concept_hits": 2
+    },
+    {
+      "id": "current-stage",
+      "category": "roadmap",
+      "query": "What is the current project stage, and what is the immediate goal for that stage?",
+      "expected_concepts": [["stage 4"], ["local evidence", "evidence workflow"], ["evaluation", "prove"]],
+      "min_concept_hits": 3
+    },
+    {
+      "id": "evaluation-api",
+      "category": "current-state",
+      "query": "Does the evaluation API currently run the full evaluator? What does the route return?",
+      "expected_concepts": [["pending"], ["python", "script", "modules"], ["not", "placeholder", "limited"]],
+      "min_concept_hits": 2
+    },
+    {
+      "id": "durable-storage-roadmap",
+      "category": "roadmap",
+      "query": "Which durable storage components are planned for later, and what should trigger adding them?",
+      "expected_concepts": [["postgresql"], ["s3", "minio"], ["redis"], ["operational need", "evaluation", "proven"]],
+      "min_concept_hits": 3
+    },
+    {
+      "id": "production-auth",
+      "category": "production-gap",
+      "query": "How is tenant isolation enforced for public HTTP users today, and what is planned for production?",
+      "expected_concepts": [["not implemented", "not yet", "default scope"], ["authentication", "authorization"], ["trusted identity"]],
+      "min_concept_hits": 2
+    },
+    {
+      "id": "frontend-persistence",
+      "category": "frontend",
+      "query": "Does the current chat UI persist conversations across reloads?",
+      "expected_concepts": [["localstorage", "local storage", "persistence"], ["planned", "backlog", "not implemented"]],
+      "min_concept_hits": 2
+    },
+    {
+      "id": "deferred-tools",
+      "category": "roadmap",
+      "query": "Which query tools are explicitly deferred, and what capabilities are implemented now?",
+      "expected_concepts": [["sql"], ["web search", "web-search"], ["vector", "keyword", "evidence"], ["bounded", "tool contract"]],
+      "min_concept_hits": 3
+    }
+  ]
+}
