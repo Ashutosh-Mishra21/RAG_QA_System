@@ -21,6 +21,8 @@ class ModelRegistry:
         self._enricher = None
         self._keyword_index: Optional[KeywordIndex] = None
         self._llm_router = None
+        self._qdrant_client = None
+        self._resource_lock = Lock()
 
     @classmethod
     def instance(cls) -> "ModelRegistry":
@@ -28,6 +30,26 @@ class ModelRegistry:
             if cls._instance is None:
                 cls._instance = cls()
             return cls._instance
+
+    def get_qdrant_client(self):
+        """Return the process-shared synchronous Qdrant client and HTTP pool."""
+        with self._resource_lock:
+            if self._qdrant_client is None:
+                from qdrant_client import QdrantClient
+
+                self._qdrant_client = QdrantClient(
+                    url=settings.QDRANT_URL,
+                    api_key=settings.QDRANT_API_KEY,
+                    pool_size=max(1, settings.QDRANT_POOL_SIZE),
+                )
+            return self._qdrant_client
+
+    def close(self) -> None:
+        """Close process-owned clients during application shutdown."""
+        with self._resource_lock:
+            client, self._qdrant_client = self._qdrant_client, None
+        if client is not None:
+            client.close()
 
     def get_embedder(self) -> Embedder:
         if self._embedder is None:
