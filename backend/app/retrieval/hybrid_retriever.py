@@ -1,5 +1,7 @@
 import logging
 import math
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from typing import Dict, List, Optional, Any
 import numpy as np
 from backend.app.models import Chunk
@@ -24,6 +26,12 @@ class HybridRetriever:
         self.temperature = temperature
         self.rrf_k = settings.RRF_K
         self.mmr_lambda = settings.MMR_LAMBDA
+        # This executor is shared by requests handled by this retriever instance;
+        # total in-flight dense/BM25 calls stay bounded across those requests.
+        self._retrieval_executor = ThreadPoolExecutor(
+            max_workers=max(1, settings.RETRIEVAL_MAX_CONCURRENCY),
+            thread_name_prefix="rag-retrieval",
+        )
 
     def _importance_weight(self, metadata: Dict[str, Any]) -> float:
         hierarchy = metadata.get("hierarchy_path")
@@ -293,31 +301,100 @@ class HybridRetriever:
             else:
                 query_weights.append(0.85)
 
-        dense_rankings: list[tuple[float, List[Chunk]]] = []
-        keyword_rankings: list[tuple[float, List[Chunk]]] = []
-
+        dense_results: list[list[Chunk]] = [[] for _ in queries]
+        keyword_results: list[list[Chunk]] = [[] for _ in queries]
         per_query_k = max(6, top_k * 2)
+        started = time.perf_counter()
+        futures = {}
 
-        for i, q in enumerate(queries):
-            weight = query_weights[i]
-
+        def run_backend(backend, backend_name: str, query_index: int, text: str):
+            task_started = time.perf_counter()
             try:
-                dense = self.dense.retrieve(
-                    q, top_k=per_query_k, metadata_filters=metadata_filters
+                results = backend.retrieve(
+                    text, top_k=per_query_k, metadata_filters=metadata_filters
                 )
-            except Exception:
-                logger.error("Dense retrieval failed for query variant", exc_info=True)
-                dense = []
-            dense_rankings.append((weight, self._best_by_id(dense)))
+                error = None
+            except Exception as exc:
+                logger.warning(
+                    "Retrieval backend failed backend=%s query_index=%s error=%s",
+                    backend_name,
+                    query_index,
+                    type(exc).__name__,
+                    exc_info=True,
+                )
+                results = []
+                error = type(exc).__name__
+            duration_ms = (time.perf_counter() - task_started) * 1000
+            logger.info(
+                "Retrieval task backend=%s query_index=%s duration_ms=%.1f "
+                "result_count=%s error=%s",
+                backend_name,
+                query_index,
+                duration_ms,
+                len(results),
+                error or "none",
+            )
+            return results
 
-            try:
-                keyword = self.keyword.retrieve(
-                    q, top_k=per_query_k, metadata_filters=metadata_filters
-                )
-            except Exception:
-                logger.exception("Sparse retrieval failed for query variant")
-                keyword = []
-            keyword_rankings.append((weight, self._best_by_id(keyword)))
+        # Query planning/rewriting is complete before this point. Dense and BM25
+        # calls are independent, so submit them together to a shared bounded pool.
+        for i, text in enumerate(queries):
+            if self.dense is not None:
+                futures[self._retrieval_executor.submit(
+                    run_backend, self.dense, "dense", i, text
+                )] = ("dense", i)
+            if self.keyword is not None:
+                futures[self._retrieval_executor.submit(
+                    run_backend, self.keyword, "bm25", i, text
+                )] = ("bm25", i)
+
+        timeout_seconds = max(0.1, settings.RETRIEVAL_TASK_TIMEOUT_SECONDS)
+        completed = set()
+        try:
+            for future in as_completed(futures, timeout=timeout_seconds):
+                completed.add(future)
+                backend_name, query_index = futures[future]
+                try:
+                    results = future.result()
+                except Exception:
+                    logger.exception(
+                        "Unexpected retrieval task failure backend=%s query_index=%s",
+                        backend_name,
+                        query_index,
+                    )
+                    results = []
+                if backend_name == "dense":
+                    dense_results[query_index] = self._best_by_id(results)
+                else:
+                    keyword_results[query_index] = self._best_by_id(results)
+        except FuturesTimeoutError:
+            for future, (backend_name, query_index) in futures.items():
+                if future not in completed:
+                    future.cancel()
+                    logger.warning(
+                        "Retrieval task timed out backend=%s query_index=%s timeout_seconds=%.1f",
+                        backend_name,
+                        query_index,
+                        timeout_seconds,
+                    )
+
+        dense_rankings = [
+            (weight, results)
+            for weight, results in zip(query_weights, dense_results)
+        ]
+        keyword_rankings = [
+            (weight, results)
+            for weight, results in zip(query_weights, keyword_results)
+        ]
+        logger.info(
+            "Hybrid retrieval completed query_count=%s submitted_tasks=%s "
+            "completed_tasks=%s concurrency_limit=%s duration_ms=%.1f",
+            len(queries),
+            len(futures),
+            len(completed),
+            max(1, settings.RETRIEVAL_MAX_CONCURRENCY),
+            (time.perf_counter() - started) * 1000,
+        )
 
         # =========================
         # 🔥 STEP 3: Dynamic weighting
