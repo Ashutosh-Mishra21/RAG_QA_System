@@ -284,7 +284,7 @@ class IngestionService:
         embed_documents = getattr(embedder, "embed_documents", embedder.embed_texts)
         embeddings = embed_documents(embedding_texts)
 
-        vector_store = VectorStore()
+        vector_store = VectorStore(client=registry.get_qdrant_client())
         if replace_document:
             self._safe_delete_document(vector_store, canonical.document_id)
         if embeddings:
