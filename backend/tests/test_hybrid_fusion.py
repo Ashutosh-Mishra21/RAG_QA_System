@@ -142,6 +142,36 @@ def test_rrf_and_mmr_break_ties_by_stable_chunk_id():
     assert [chunk.id for chunk in mmr] == ["a", "b"]
 
 
+def test_dense_and_bm25_first_pass_run_concurrently(monkeypatch):
+    from threading import Barrier
+
+    monkeypatch.setattr(settings, "RETRIEVAL_MAX_CONCURRENCY", 2)
+    barrier = Barrier(2)
+
+    class ConcurrentBackend:
+        def __init__(self, chunk_id):
+            self.chunk_id = chunk_id
+
+        def retrieve(self, query, top_k=5, metadata_filters=None):
+            barrier.wait(timeout=2)
+            return [
+                Chunk(
+                    id=self.chunk_id,
+                    content=f"evidence from {self.chunk_id}",
+                    metadata={},
+                    score=1.0,
+                )
+            ]
+
+    retriever = HybridRetriever(
+        ConcurrentBackend("dense"),
+        ConcurrentBackend("bm25"),
+    )
+    results = retriever.retrieve("query", top_k=2)
+
+    assert {chunk.id for chunk in results} == {"dense", "bm25"}
+
+
 def test_hybrid_falls_back_to_sparse_when_dense_fails():
     class BrokenDense:
         def retrieve(self, *args, **kwargs):
