@@ -97,12 +97,12 @@ class EvidenceSufficiencyScorer:
             reasons.append("no retrievable evidence")
         if terms and covered == 0:
             reasons.append("no query-term overlap")
+        if missing_terms:
+            reasons.append(
+                "missing query terms: " + ", ".join(missing_terms[:8])
+            )
         if coverage < 0.5:
             reasons.append("weak query-term coverage")
-            if missing_terms:
-                reasons.append(
-                    "missing query terms: " + ", ".join(missing_terms[:8])
-                )
         if provenance < 1.0:
             reasons.append("incomplete evidence provenance")
         sufficient = bool(valid) and score >= self.threshold
